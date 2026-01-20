@@ -3,7 +3,7 @@ from jose import jwt, jwk
 from jose.utils import base64url_decode
 from fastapi import HTTPException, status
 from app.core.config import settings
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 APPLE_KEYS_URL = "https://appleid.apple.com/auth/keys"
 APPLE_ISSUER = "https://appleid.apple.com"
@@ -21,7 +21,7 @@ def get_apple_public_keys():
     """
     global _cached_keys, _cached_at
 
-    if _cached_keys and _cached_at and datetime.utcnow() - _cached_at < _cache_ttl:
+    if _cached_keys and _cached_at and datetime.now(timezone.utc) - _cached_at < _cache_ttl:
         return _cached_keys
 
     response = requests.get(APPLE_KEYS_URL, timeout=5)
@@ -32,7 +32,7 @@ def get_apple_public_keys():
         )
 
     _cached_keys = response.json()["keys"]
-    _cached_at = datetime.utcnow()
+    _cached_at = datetime.now(timezone.utc)
     return _cached_keys
 
 

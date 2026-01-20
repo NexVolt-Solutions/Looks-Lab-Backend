@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.database import get_db
 from app.enums import AuthProviderEnum
-from app.schemas.auth import GoogleAuthSchema, AppleAuthSchema, TokenResponse
+from app.schemas.auth import GoogleAuthSchema, AppleAuthSchema, TokenResponse, SignOutResponse
 from app.utils.apple_utils import verify_apple_token
 from app.utils.google_utils import verify_google_token
 from app.utils.auth_utils import (
@@ -37,7 +37,7 @@ def google_sign_in(payload: GoogleAuthSchema, db: Session = Depends(get_db)):
                 "picture": idinfo.get("picture") or payload.picture,
                 "google_sub": idinfo.get("sub"),
                 "google_picture": idinfo.get("picture"),
-                "google_id_token": payload.id_token,
+                # Security: ID token is verified but not stored
             },
             db=db,
         )
@@ -66,7 +66,7 @@ def apple_sign_in(payload: AppleAuthSchema, db: Session = Depends(get_db)):
             payload={
                 "name": payload.name,
                 "picture": payload.picture,
-                "apple_id_token": payload.id_token,
+                # Security: ID token is verified but not stored
             },
             db=db,
         )
@@ -89,8 +89,9 @@ def refresh_access_token(refresh_token: str, db: Session = Depends(get_db)):
 # ---------------------------
 # Sign Out API
 # ---------------------------
-@router.post("/signout")
+@router.post("/signout", response_model=SignOutResponse)
 def sign_out(refresh_token: str, db: Session = Depends(get_db)):
+    """Sign out a user by revoking their refresh token."""
     revoke_refresh_token(refresh_token, db)
-    return {"detail": "Successfully signed out"}
+    return SignOutResponse(detail="Successfully signed out")
 

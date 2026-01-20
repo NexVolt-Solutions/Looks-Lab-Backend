@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.models.domain import DomainQuestion, DomainAnswer
 from app.models.onboarding import OnboardingSession
 from app.models.subscription import Subscription, SubscriptionStatus
+from app.enums import DomainEnum
 
 from app.schemas.domain import (
     DomainAnswerCreate,
@@ -36,21 +37,6 @@ from app.ai.quit_porn.config import QuitPornAIConfig
 from app.ai.facial.processor import analyze_facial
 from app.ai.facial.config import FacialAIConfig
 
-
-# -------------------------------------------------
-# Valid Domains
-# -------------------------------------------------
-VALID_DOMAINS = {
-    "skincare",
-    "haircare",
-    "fashion",
-    "workout",
-    "quit porn",
-    "diet",
-    "height",
-    "facial",
-}
-
 haircare_config = HaircareAIConfig()
 skincare_config = SkincareAIConfig()
 fashion_config = FashionAIConfig()
@@ -65,7 +51,8 @@ facial_config = FacialAIConfig()
 # Helpers
 # -------------------------------------------------
 def validate_domain(domain: str):
-    if domain not in VALID_DOMAINS:
+    """Validate domain against DomainEnum."""
+    if domain not in DomainEnum.values():
         raise HTTPException(status_code=422, detail="Invalid domain selection")
 
 

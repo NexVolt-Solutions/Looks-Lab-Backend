@@ -1,5 +1,5 @@
 from jose import jwt, JWTError, ExpiredSignatureError
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from fastapi import HTTPException, status, Depends
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
@@ -25,8 +25,9 @@ def _create_token(data: dict, expires_minutes: int) -> str:
     Create a JWT with an expiration timestamp.
     """
     to_encode = data.copy()
-    expire = datetime.utcnow() + timedelta(minutes=expires_minutes)
-    to_encode.update({"exp": expire, "iat": datetime.utcnow()})
+    now = datetime.now(timezone.utc)
+    expire = now + timedelta(minutes=expires_minutes)
+    to_encode.update({"exp": expire, "iat": now})
     return jwt.encode(to_encode, SECRET, algorithm=ALGORITHM)
 
 
@@ -69,7 +70,12 @@ def create_refresh_token() -> str:
 
 def get_refresh_expiry() -> datetime:
     """Return UTC expiry timestamp for refresh token."""
-    return datetime.utcnow() + timedelta(days=REFRESH_DAYS)
+    return datetime.now(timezone.utc) + timedelta(days=REFRESH_DAYS)
+
+
+def get_current_time() -> datetime:
+    """Return current UTC timestamp."""
+    return datetime.now(timezone.utc)
 
 # ---------------------------
 # User Activation Helper

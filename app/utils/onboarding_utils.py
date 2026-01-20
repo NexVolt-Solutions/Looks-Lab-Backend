@@ -1,5 +1,5 @@
 from uuid import UUID, uuid4
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 
 from app.models.onboarding import OnboardingQuestion, OnboardingAnswer, OnboardingSession
@@ -61,7 +61,7 @@ def save_answer(session_id: UUID, payload: OnboardingAnswerCreate, db: Session) 
         session_id=session_id,
         question_id=payload.question_id,
         answer=payload.answer,
-        completed_at=datetime.utcnow(),
+        completed_at=datetime.now(timezone.utc),
     )
     db.add(answer)
     db.commit()
@@ -87,7 +87,7 @@ def confirm_payment_for_session(session_id: UUID, db: Session) -> OnboardingSess
         raise ValueError("Session not found")
 
     session.is_paid = True
-    session.payment_confirmed_at = datetime.utcnow()
+    session.payment_confirmed_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(session)
     return session

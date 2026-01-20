@@ -43,3 +43,8 @@ class RefreshTokenOut(RefreshTokenBase):
 
     model_config = {"from_attributes": True}
 
+
+class SignOutResponse(BaseModel):
+    """Response model for sign out endpoint."""
+    detail: str
+

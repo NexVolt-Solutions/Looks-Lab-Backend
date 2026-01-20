@@ -1,4 +1,3 @@
-# app/core/config.py
 from typing import Optional, List
 from pydantic_settings import BaseSettings
 
@@ -12,7 +11,7 @@ class Settings(BaseSettings):
     TRUSTED_HOSTS: Optional[str] = None  # comma separated
 
     # Database
-    DATABASE_URI: str = "postgresql://looks_lab:lab3344@localhost:5432/looks_lab"
+    DATABASE_URI: str  # Required - no default for security
 
     # Cache / Queue
     REDIS_URL: str = "redis://localhost:6379/0"
@@ -89,6 +88,37 @@ class Settings(BaseSettings):
         if not self.TRUSTED_HOSTS:
             return ["*"] if not self.is_production else []
         return [h.strip() for h in self.TRUSTED_HOSTS.split(",") if h.strip()]
+
+    def validate_settings(self) -> None:
+        """Validate required settings at startup."""
+        errors = []
+        
+        # Required in all environments
+        if not self.DATABASE_URI:
+            errors.append("DATABASE_URI is required")
+        if not self.JWT_SECRET:
+            errors.append("JWT_SECRET is required")
+        
+        # Production-specific requirements
+        if self.is_production:
+            if not self.CORS_ORIGINS:
+                errors.append(
+                    "CORS_ORIGINS must be set in production. "
+                    "Set ENV=development for local development."
+                )
+            if not self.TRUSTED_HOSTS:
+                errors.append(
+                    "TRUSTED_HOSTS must be set in production. "
+                    "Set ENV=development for local development."
+                )
+            if self.JWT_SECRET and len(self.JWT_SECRET) < 32:
+                errors.append("JWT_SECRET must be at least 32 characters in production")
+        
+        if errors:
+            error_msg = "Configuration validation failed:\n" + "\n".join(f"  - {e}" for e in errors)
+            if self.is_production:
+                error_msg += "\n\nNote: If running locally, set ENV=development in your .env file"
+            raise ValueError(error_msg)
 
 
 settings = Settings()

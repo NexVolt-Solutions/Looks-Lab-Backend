@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from app.models.image import Image
 from app.schemas.image import ImageCreate, ImageUpdate
 from app.models.image import ImageStatus, ImageType
+from app.core.file_validation import validate_file_extension
 
 
 # --------------------------- # VALIDATION HELPERS # ---------------------------
@@ -26,6 +27,9 @@ def create_image_entry(payload: ImageCreate, db: Session) -> Image:
     Create a new image record in the database.
     Supports domain and view metadata (e.g. diet/meal, diet/barcode, skincare/front).
     """
+    # Validate file path and extension
+    validate_file_extension(payload.file_path)
+    
     if payload.image_type:
         validate_image_type(payload.image_type)
     if payload.status:

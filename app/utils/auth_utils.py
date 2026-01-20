@@ -25,8 +25,7 @@ def get_or_create_user(email: str, provider: AuthProviderEnum, payload: dict, db
             is_verified=True,
             is_active=True,
             profile_image=payload.get("picture"),
-            last_google_id_token=payload.get("google_id_token"),
-            last_apple_id_token=payload.get("apple_id_token"),
+            # Security: Do not store ID tokens - they're sensitive and not needed after verification
             google_sub=payload.get("google_sub"),
             google_picture=payload.get("google_picture"),
         )
@@ -47,9 +46,10 @@ def get_or_create_user(email: str, provider: AuthProviderEnum, payload: dict, db
         if provider == AuthProviderEnum.GOOGLE:
             user.google_sub = payload.get("google_sub")
             user.google_picture = payload.get("google_picture")
-            user.last_google_id_token = payload.get("google_id_token")
+            # Security: Do not store ID tokens - they're sensitive and not needed after verification
         elif provider == AuthProviderEnum.APPLE:
-            user.last_apple_id_token = payload.get("apple_id_token")
+            # Security: Do not store ID tokens - they're sensitive and not needed after verification
+            pass
 
         ensure_user_active(user)
         db.commit()

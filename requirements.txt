@@ -16,6 +16,7 @@ pydantic-settings==2.6.1
 python-jose==3.4.0
 google-auth==2.35.0
 requests==2.32.4
+slowapi==0.1.9
 
 # Testing
 pytest==8.3.3

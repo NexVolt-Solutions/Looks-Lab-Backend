@@ -76,3 +76,9 @@ class DomainFlowOut(BaseModel):
     ai_features: Optional[Dict[str, Any]] = None
     ai_exercises: Optional[List[Dict[str, Any]]] = None
 
+
+class DomainSelectionResponse(BaseModel):
+    """Response model for domain selection."""
+    status: str
+    domain: Optional[str] = None
+
