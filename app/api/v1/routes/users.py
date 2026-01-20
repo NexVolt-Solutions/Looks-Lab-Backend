@@ -7,7 +7,8 @@ from app.schemas.user import UserOut, UserUpdate
 from app.utils.jwt_utils import get_current_user
 from app.utils.user_utils import get_user_or_404, update_user_fields, delete_user
 
-router = APIRouter(tags=["Users"])
+router = APIRouter()
+
 
 
 # --------------------------- # GET Authenticated User Profile # ---------------------------

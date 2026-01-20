@@ -13,7 +13,7 @@ from app.utils.insight_utils import (
     delete_insight_record,
 )
 
-router = APIRouter(tags=["Insights"])
+router = APIRouter()
 
 
 @router.post("/", response_model=InsightOut)

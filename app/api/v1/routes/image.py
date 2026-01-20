@@ -12,7 +12,7 @@ from app.utils.image_utils import (
     delete_image_record,
 )
 
-router = APIRouter(tags=["Images"])
+router = APIRouter()
 
 
 # --------------------------- # POST Upload Image # ---------------------------

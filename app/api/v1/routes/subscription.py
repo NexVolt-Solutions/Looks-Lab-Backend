@@ -11,7 +11,7 @@ from app.utils.subscription_utils import (
     cancel_subscription_entry,
 )
 
-router = APIRouter(tags=["Subscriptions"])
+router = APIRouter()
 
 
 # --------------------------- # POST Create Subscription # ---------------------------

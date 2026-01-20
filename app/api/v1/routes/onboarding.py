@@ -23,7 +23,7 @@ from app.utils.onboarding_utils import (
 )
 from app.utils.onboarding_utils import next_or_complete, onboarding_progress
 
-router = APIRouter(tags=["Onboarding Flow"])
+router = APIRouter()
 
 
 @router.post("/sessions", response_model=OnboardingSessionOut)

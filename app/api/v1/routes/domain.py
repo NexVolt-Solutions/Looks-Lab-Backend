@@ -19,7 +19,7 @@ from app.utils.domain_utils import (
 )
 from app.utils.jwt_utils import get_current_user
 
-router = APIRouter(tags=["Domain Flow"])
+router = APIRouter()
 
 
 @router.patch("/onboarding/sessions/{session_id}/domain", response_model=DomainSelectionResponse)

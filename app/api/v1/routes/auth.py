@@ -14,7 +14,7 @@ from app.utils.auth_utils import (
     revoke_refresh_token,
 )
 
-router = APIRouter(tags=["auth"])
+router = APIRouter()
 
 
 # ---------------------------

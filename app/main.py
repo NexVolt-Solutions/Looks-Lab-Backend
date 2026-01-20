@@ -35,6 +35,7 @@ async def lifespan(app: FastAPI):
     
     database.init_db()
 
+
     yield
 
     # Shutdown logic
@@ -101,10 +102,11 @@ create_rate_limit_middleware(app)
 # Global exception handlers
 setup_exception_handlers(app)
 
+# Routers - include with no prefix since sub-routers already have /api/v1 prefix
+app.include_router(router)
+
 # Health check at root level (not under /api/v1)
 from app.api.v1.api_router import health_check
 app.get("/health", tags=["system"])(health_check)
 
-# Routers
-app.include_router(router)
 

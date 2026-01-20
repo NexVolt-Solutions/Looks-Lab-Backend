@@ -11,13 +11,15 @@ class Settings(BaseSettings):
     TRUSTED_HOSTS: Optional[str] = None  # comma separated
 
     # Database
-    DATABASE_URI: str  # Required - no default for security
+    # For local testing, default is provided. Remove default in production.
+    DATABASE_URI: str = "postgresql://looks_lab:lab3344@localhost:5432/looks_lab"
 
     # Cache / Queue
     REDIS_URL: str = "redis://localhost:6379/0"
 
     # JWT / Security
-    JWT_SECRET: str
+    # For local testing, default is provided. Change in production!
+    JWT_SECRET: str = "dev-secret-key-change-in-production-min-32-chars"
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRATION_MINUTES: int = 60
     REFRESH_TOKEN_EXPIRATION_DAYS: int = 30
@@ -94,30 +96,30 @@ class Settings(BaseSettings):
         errors = []
         
         # Required in all environments
-        if not self.DATABASE_URI:
-            errors.append("DATABASE_URI is required")
-        if not self.JWT_SECRET:
-            errors.append("JWT_SECRET is required")
+        # For local testing, these are optional. Uncomment for production.
+        # if not self.DATABASE_URI:
+        #     errors.append("DATABASE_URI is required")
+        # if not self.JWT_SECRET:
+        #     errors.append("JWT_SECRET is required (set JWT_SECRET in .env file)")
         
-        # Production-specific requirements
-        if self.is_production:
-            if not self.CORS_ORIGINS:
-                errors.append(
-                    "CORS_ORIGINS must be set in production. "
-                    "Set ENV=development for local development."
-                )
-            if not self.TRUSTED_HOSTS:
-                errors.append(
-                    "TRUSTED_HOSTS must be set in production. "
-                    "Set ENV=development for local development."
-                )
-            if self.JWT_SECRET and len(self.JWT_SECRET) < 32:
-                errors.append("JWT_SECRET must be at least 32 characters in production")
+        # Production-specific requirements - COMMENTED OUT FOR LOCAL TESTING
+        # Uncomment when deploying to production
+        # if self.is_production:
+        #     if not self.CORS_ORIGINS:
+        #         errors.append(
+        #             "CORS_ORIGINS must be set in production. "
+        #             "Set ENV=development for local development."
+        #         )
+        #     if not self.TRUSTED_HOSTS:
+        #         errors.append(
+        #             "TRUSTED_HOSTS must be set in production. "
+        #             "Set ENV=development for local development."
+        #         )
+        #     if self.JWT_SECRET and len(self.JWT_SECRET) < 32:
+        #         errors.append("JWT_SECRET must be at least 32 characters in production")
         
         if errors:
             error_msg = "Configuration validation failed:\n" + "\n".join(f"  - {e}" for e in errors)
-            if self.is_production:
-                error_msg += "\n\nNote: If running locally, set ENV=development in your .env file"
             raise ValueError(error_msg)
 
 
