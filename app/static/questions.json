@@ -1,0 +1,651 @@
+{
+  "profile_setup": [
+    {
+      "step": "profile_setup",
+      "question": "What is your name?",
+      "type": "text"
+    },
+    {
+      "step": "profile_setup",
+      "question": "What is your age?",
+      "type": "number",
+      "constraints": { "min": 10, "max": 120 }
+    },
+    {
+      "step": "profile_setup",
+      "question": "What is your weight (lb)?",
+      "type": "number",
+      "constraints": { "min": 40, "max": 1000 }
+    },
+    {
+      "step": "profile_setup",
+      "question": "What is your height (cm)?",
+      "type": "number",
+      "constraints": { "min": 60, "max": 250 }
+    },
+    {
+      "step": "profile_setup",
+      "question": "What is your gender?",
+      "type": "choice",
+      "options": ["Male", "Female", "Other"]
+    }
+  ],
+
+  "daily_lifestyle": [
+    {
+      "step": "daily_lifestyle",
+      "question": "How do you usually feel during the day?",
+      "type": "choice",
+      "options": ["Low / tired", "Average", "Energetic"]
+    },
+    {
+      "step": "daily_lifestyle",
+      "question": "How many hours do you usually sleep?",
+      "type": "choice",
+      "options": ["Less than 6", "6–7", "7–8", "More than 8"]
+    },
+    {
+      "step": "daily_lifestyle",
+      "question": "How much water do you drink daily?",
+      "type": "choice",
+      "options": ["Less than 1 liter", "1.5–2.5 liter", "More than 2.5 liter"]
+    }
+  ],
+
+  "goals_focus": [
+    {
+      "step": "goals_focus",
+      "question": "What do you want to improve the most?",
+      "type": "multi_choice",
+      "options": [
+        "Overall appearance",
+        "Confidence",
+        "Health & energy",
+        "Discipline & habits",
+        "All of the above"
+      ]
+    },
+    {
+      "step": "goals_focus",
+      "question": "How satisfied are you with your looks currently?",
+      "type": "choice",
+      "options": ["Not satisfied", "Low", "Moderate", "High"]
+    }
+  ],
+
+  "motivation": [
+    {
+      "step": "motivation",
+      "question": "Your current motivation level?",
+      "type": "choice",
+      "options": ["Low", "Medium", "High"]
+    },
+    {
+      "step": "motivation",
+      "question": "What motivates you more?",
+      "type": "choice",
+      "options": ["Seeing progress", "Streaks & completion", "Clear instructions"]
+    }
+  ],
+
+  "experience_planning": [
+    {
+      "step": "experience_planning",
+      "question": "Have you used self-improvement or AI apps before?",
+      "type": "choice",
+      "options": ["Yes, regularly", "Tried a few", "First time"]
+    },
+    {
+      "step": "experience_planning",
+      "question": "How often do you reflect on your day?",
+      "type": "choice",
+      "options": ["Rarely", "Sometimes", "Daily"]
+    },
+    {
+      "step": "experience_planning",
+      "question": "How long are you planning to commit to self-improvement?",
+      "type": "choice",
+      "options": ["A few weeks", "1–3 months", "Long term"]
+    }
+  ],
+
+  "haircare": [
+    {
+      "step": "haircare",
+      "question": "What is your natural hair type?",
+      "type": "choice",
+      "options": ["Straight", "Wavy", "Curly", "Coily"]
+    },
+    {
+      "step": "haircare",
+      "question": "How dense is your hair on the scalp?",
+      "type": "choice",
+      "options": ["Sparse / thin", "Moderate", "Very dense"]
+    },
+    {
+      "step": "haircare",
+      "question": "How does your scalp usually feel?",
+      "type": "choice",
+      "options": ["Oily", "Normal", "Dry / flaky", "Sensitive"]
+    },
+    {
+      "step": "haircare",
+      "question": "What worries you most about your hair?",
+      "type": "multi_choice",
+      "options": [
+        "Hair fall / shedding",
+        "Receding hairline",
+        "Thinning / low volume",
+        "Frizz / dryness",
+        "Dullness / lack of shine"
+      ]
+    },
+    {
+      "step": "haircare",
+      "question": "How often do you wash your hair?",
+      "type": "choice",
+      "options": ["Daily", "Every other day", "Once a week", "Once a month"]
+    },
+    {
+      "step": "haircare",
+      "question": "How often do you use heat styling, blow drying, or chemical treatments?",
+      "type": "choice",
+      "options": [
+        "Daily / very frequent",
+        "Occasionally (1–2 times/week)",
+        "Rarely or never"
+      ]
+    },
+    {
+      "step": "haircare",
+      "question": "Is there a history of hair thinning or hair loss in your family?",
+      "type": "choice",
+      "options": [
+        "Yes, father’s side",
+        "Yes, mother’s side",
+        "Yes, both sides",
+        "No"
+      ]
+    },
+    {
+      "step": "haircare",
+      "question": "What are your main hair goals?",
+      "type": "multi_choice",
+      "options": [
+        "Reduce hair fall / strengthen",
+        "Improve shine / smoothness",
+        "Increase thickness / volume",
+        "Improve scalp health",
+        "Slow genetic hair thinning"
+      ]
+    }
+  ],
+
+  "skincare": [
+    {
+      "step": "skincare",
+      "question": "How hydrated is your skin usually?",
+      "type": "choice",
+      "options": ["Low", "Medium", "High"]
+    },
+    {
+      "step": "skincare",
+      "question": "How often do you get breakouts or acne?",
+      "type": "choice",
+      "options": ["Rare", "Sometimes", "Frequent"]
+    },
+    {
+      "step": "skincare",
+      "question": "Do you notice redness or irritation on your skin?",
+      "type": "choice",
+      "options": ["None", "Mild", "Moderate", "Severe"]
+    },
+    {
+      "step": "skincare",
+      "question": "Does your skin feel dull sometimes?",
+      "type": "choice",
+      "options": ["Yes", "Often", "All the time"]
+    },
+    {
+      "step": "skincare",
+      "question": "Skin elasticity & firmness:",
+      "type": "choice",
+      "options": ["Low", "Medium", "High"]
+    },
+    {
+      "step": "skincare",
+      "question": "Do you follow a skincare routine currently?",
+      "type": "choice",
+      "options": [
+        "None",
+        "Basic (Cleanser + Moisturizer)",
+        "Advanced (Multiple steps)"
+      ]
+    },
+    {
+      "step": "skincare",
+      "question": "Do you have any allergies or sensitivities to skincare products?",
+      "type": "choice",
+      "options": ["Yes", "No"]
+    },
+    {
+      "step": "skincare",
+      "question": "If yes, please specify your allergies or sensitivities",
+      "type": "text"
+    },
+    {
+      "step": "skincare",
+      "question": "What are your main skin goals?",
+      "type": "multi_choice",
+      "options": [
+        "Reduce acne / pimples / breakouts",
+        "Reduce dark spots / hyperpigmentation",
+        "Even skin tone / reduce redness",
+        "Increase radiance / glow",
+        "Reduce fine lines / wrinkles",
+        "Hydrate & improve skin texture",
+        "Reduce oiliness / balance skin",
+        "Reduce dullness / fatigue signs",
+        "Improve overall skin health"
+      ]
+    }
+  ],
+
+  "height": [
+    {
+      "step": "height",
+      "question": "How often do you exercise or stay active?",
+      "type": "choice",
+      "options": ["Daily", "3–4 times/week", "Rarely"]
+    },
+    {
+      "step": "height",
+      "question": "How balanced is your diet?",
+      "type": "choice",
+      "options": [
+        "Poor (low protein, few nutrients)",
+        "Average",
+        "Excellent (high protein, balanced nutrition)"
+      ]
+    },
+    {
+      "step": "height",
+      "question": "Do you do stretching exercises or sports that promote height?",
+      "type": "choice",
+      "options": ["Yes, regularly", "Occasionally", "No"]
+    },
+    {
+      "step": "height",
+      "question": "Did your parents or siblings reach their full adult height?",
+      "type": "choice",
+      "options": ["Father yes", "Mother yes", "Both yes", "Not sure"]
+    },
+    {
+      "step": "height",
+      "question": "Did you experience early or late growth spurts?",
+      "type": "choice",
+      "options": ["Early", "Average", "Late", "Not sure"]
+    },
+    {
+      "step": "height",
+      "question": "How often do you consume calcium-rich foods?",
+      "type": "choice",
+      "options": ["Daily", "Few times/week", "Rarely / never"]
+    },
+    {
+      "step": "height",
+      "question": "What is your main goal regarding height?",
+      "type": "choice",
+      "options": [
+        "Maximize growth potential",
+        "Improve posture & spinal alignment",
+        "Both"
+      ]
+    }
+  ],
+
+  "workout": [
+    {
+      "step": "workout",
+      "question": "What is your body type?",
+      "type": "choice",
+      "options": [
+        "Ectomorph (thin, hard to gain weight)",
+        "Mesomorph (athletic, muscular)",
+        "Endomorph (tends to gain fat easily)",
+        "Mixed / unsure"
+      ]
+    },
+    {
+      "step": "workout",
+      "question": "What is your main workout goal?",
+      "type": "multi_choice",
+      "options": [
+        "Build muscle / strength",
+        "Lose fat / lean out",
+        "Improve endurance / stamina",
+        "Improve flexibility / posture",
+        "Overall health & fitness"
+      ]
+    },
+    {
+      "step": "workout",
+      "question": "Target weight / physique goal",
+      "type": "number"
+    },
+    {
+      "step": "workout",
+      "question": "How many days per week do you currently exercise?",
+      "type": "choice",
+      "options": ["2–3", "4–5", "6–7"]
+    },
+    {
+      "step": "workout",
+      "question": "Preferred type of workouts",
+      "type": "multi_choice",
+      "options": [
+        "Gym / strength training",
+        "Home workouts",
+        "Yoga / Stretching",
+        "Sports"
+      ]
+    },
+    {
+      "step": "workout",
+      "question": "Workout experience level",
+      "type": "choice",
+      "options": ["Beginner", "Intermediate", "Advanced"]
+    },
+    {
+      "step": "workout",
+      "question": "Preferred workout duration",
+      "type": "choice",
+      "options": ["<30 minutes", "30–60 minutes", "60+ minutes"]
+    }
+  ],
+
+  "diet": [
+    {
+      "step": "diet",
+      "question": "How many meals do you usually have per day?",
+      "type": "choice",
+      "options": ["1–2", "3", "4–5"]
+    },
+    {
+      "step": "diet",
+      "question": "Do you track calories or macros?",
+      "type": "choice",
+      "options": ["Yes, regularly", "Sometimes", "No"]
+    },
+    {
+      "step": "diet",
+      "question": "Diet type preference",
+      "type": "choice",
+      "options": ["Omnivore", "Vegetarian", "Vegan", "Other / Flexible"]
+    },
+    {
+      "step": "diet",
+      "question": "Do you consume sugar-sweetened beverages?",
+      "type": "choice",
+      "options": ["Yes, frequently", "Occasionally", "Rarely / never"]
+    },
+    {
+      "step": "diet",
+      "question": "Do you consume supplements?",
+      "type": "multi_choice",
+      "options": [
+        "Protein / whey",
+        "Vitamins / minerals",
+        "Pre-workout / fat burners",
+        "None"
+      ]
+    },
+    {
+      "step": "diet",
+      "question": "What are your cooking preferences?",
+      "type": "choice",
+      "options": [
+        "Home-cooked meals",
+        "Simple quick meals",
+        "Don’t cook / rely on ready meals"
+      ]
+    },
+    {
+      "step": "diet",
+      "question": "What weight would you like to achieve?",
+      "type": "number"
+    }
+  ],
+
+  "fashion": [
+    {
+      "step": "fashion",
+      "question": "What is your body type?",
+      "type": "choice",
+      "options": [
+        "Ectomorph / Slim",
+        "Mesomorph / Athletic",
+        "Endomorph / Curvy / Stocky",
+        "Mixed / unsure"
+      ]
+    },
+    {
+      "step": "fashion",
+      "question": "Which fashion style do you prefer?",
+      "type": "multi_choice",
+      "options": [
+        "Casual / Everyday",
+        "Business / Formal",
+        "Streetwear / Trendy",
+        "Sporty / Athleisure",
+        "Elegant / Luxury",
+        "Minimalist"
+      ]
+    },
+    {
+      "step": "fashion",
+      "question": "Do you prefer fitted or loose clothing?",
+      "type": "choice",
+      "options": [
+        "Fitted / tailored",
+        "Loose / relaxed",
+        "Combination"
+      ]
+    },
+    {
+      "step": "fashion",
+      "question": "Do you prefer seasonal / climate-based outfit suggestions?",
+      "type": "choice",
+      "options": ["Yes, always", "Occasionally", "No"]
+    },
+    {
+      "step": "fashion",
+      "question": "Do you like to follow fashion trends?",
+      "type": "choice",
+      "options": [
+        "Yes, always",
+        "Sometimes",
+        "No, prefer classic styles"
+      ]
+    },
+    {
+      "step": "fashion",
+      "question": "Do you wear accessories regularly?",
+      "type": "choice",
+      "options": ["Yes", "Occasionally", "No"]
+    },
+    {
+      "step": "fashion",
+      "question": "How often do you attend events that require styling?",
+      "type": "choice",
+      "options": [
+        "Daily / work / meetings",
+        "Weekly / casual events",
+        "Rarely"
+      ]
+    },
+    {
+      "step": "fashion",
+      "question": "What is your main goal with fashion / styling?",
+      "type": "multi_choice",
+      "options": [
+        "Improve overall appearance",
+        "Build a versatile wardrobe",
+        "Match colors and accessories",
+        "Follow fashion trends",
+        "Boost confidence"
+      ]
+    }
+  ],
+
+  "facial_features": [
+    {
+      "step": "facial_features",
+      "question": "What areas do you want to improve?",
+      "type": "multi_choice",
+      "options": [
+        "Jawline / chin",
+        "Hollow Cheeks",
+        "Forward jaw projection",
+        "Overall symmetry"
+      ]
+    },
+    {
+      "step": "facial_features",
+      "question": "Do you want to enhance facial aesthetics naturally?",
+      "type": "choice",
+      "options": ["Yes", "No"]
+    },
+    {
+      "step": "facial_features",
+      "question": "Do you exercise your face regularly?",
+      "type": "choice",
+      "options": ["Yes", "Occasionally", "No"]
+    },
+    {
+      "step": "facial_features",
+      "question": "Do you sleep on your back or side?",
+      "type": "choice",
+      "options": [
+        "Back (better for facial symmetry)",
+        "Side / stomach",
+        "Mixed"
+      ]
+    },
+    {
+      "step": "facial_features",
+      "question": "Do you feel your face is symmetrical?",
+      "type": "choice",
+      "options": [
+        "Yes, mostly",
+        "Slightly asymmetrical",
+        "No, noticeably asymmetrical"
+      ]
+    },
+    {
+      "step": "facial_features",
+      "question": "Do you grind your teeth or clench your jaw often?",
+      "type": "choice",
+      "options": ["Yes, frequently", "Occasionally", "No"]
+    },
+    {
+      "step": "facial_features",
+      "question": "Do you breathe through your mouth?",
+      "type": "choice",
+      "options": ["No", "Yes often", "Daily"]
+    },
+    {
+      "step": "facial_features",
+      "question": "Do you want exercises to define your jawline naturally?",
+      "type": "choice",
+      "options": ["Yes", "No"]
+    }
+  ],
+
+  "quit_porn": [
+    {
+      "step": "quit_porn",
+      "question": "How often do you currently watch porn?",
+      "type": "choice",
+      "options": [
+        "Daily",
+        "Few times/week",
+        "Occasionally",
+        "Rarely"
+      ]
+    },
+    {
+      "step": "quit_porn",
+      "question": "What triggers your porn use?",
+      "type": "multi_choice",
+      "options": [
+        "Stress / anxiety",
+        "Boredom / loneliness",
+        "Nighttime / before sleep",
+        "Masturbation habit",
+        "Other triggers (please specify)"
+      ]
+    },
+    {
+      "step": "quit_porn",
+      "question": "If other triggers, please specify",
+      "type": "text"
+    },
+    {
+      "step": "quit_porn",
+      "question": "Do you notice urges at certain times of day?",
+      "type": "choice",
+      "options": [
+        "Morning",
+        "Afternoon",
+        "Evening / Night",
+        "Random / anytime"
+      ]
+    },
+    {
+      "step": "quit_porn",
+      "question": "Do you exercise regularly to reduce urges or stress?",
+      "type": "choice",
+      "options": ["Yes, daily", "Occasionally", "No"]
+    },
+    {
+      "step": "quit_porn",
+      "question": "Do you watch porn as a coping mechanism for emotions?",
+      "type": "choice",
+      "options": ["Yes, frequently", "Sometimes", "No"]
+    },
+    {
+      "step": "quit_porn",
+      "question": "Do you have hobbies or productive activities to distract yourself?",
+      "type": "choice",
+      "options": ["Yes, multiple", "Few", "None"]
+    },
+    {
+      "step": "quit_porn",
+      "question": "What is your main goal with quitting or reducing porn?",
+      "type": "multi_choice",
+      "options": [
+        "Improve focus & productivity",
+        "Improve self-confidence & motivation",
+        "Improve energy & relationships",
+        "Self-control"
+      ]
+    },
+    {
+      "step": "quit_porn",
+      "question": "Do you feel guilty or anxious about porn usage?",
+      "type": "choice",
+      "options": ["Often", "Sometimes", "Rarely / never"]
+    },
+    {
+      "step": "quit_porn",
+      "question": "How committed are you to quitting porn?",
+      "type": "choice",
+      "options": [
+        "Very committed",
+        "Somewhat committed",
+        "Just exploring"
+      ]
+    }
+  ]
+}

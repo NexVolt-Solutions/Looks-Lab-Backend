@@ -1,0 +1,34 @@
+# Core backend
+fastapi==0.115.0
+uvicorn[standard]==0.32.0
+
+# Database + ORM
+sqlalchemy==2.0.36
+alembic==1.13.2
+psycopg2-binary==2.9.9
+
+# Environment & Config
+python-dotenv==1.0.1
+pydantic==2.12.5
+pydantic-settings==2.6.1
+
+# Security / Auth
+python-jose==3.4.0
+google-auth==2.35.0
+requests==2.32.4
+
+# Testing
+pytest==8.3.3
+httpx==0.27.2
+coverage==7.6.1
+
+# AI / Image Processing
+opencv-python-headless==4.10.0.84
+mediapipe==0.10.14
+
+# Gemini SDK
+google-generativeai==0.8.3
+
+# Optional for future AI/ML
+# torch==2.5.1
+# transformers==4.46.2
