@@ -102,7 +102,6 @@ create_rate_limit_middleware(app)
 # Global exception handlers
 setup_exception_handlers(app)
 
-# Routers - include with no prefix since sub-routers already have /api/v1 prefix
 app.include_router(router)
 
 # Health check at root level (not under /api/v1)
