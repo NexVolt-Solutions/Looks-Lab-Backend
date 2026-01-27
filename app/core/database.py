@@ -50,3 +50,4 @@ def close_db() -> None:
         logger.info("Database engine disposed successfully")
     except Exception as e:
         logger.error(f"Database engine dispose failed: {e}")
+

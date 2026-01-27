@@ -1,6 +1,7 @@
 # Core backend
 fastapi==0.115.0
 uvicorn[standard]==0.32.0
+gunicorn==23.0.0
 
 # Database + ORM
 sqlalchemy==2.0.36
@@ -11,6 +12,9 @@ psycopg2-binary==2.9.9
 python-dotenv==1.0.1
 pydantic==2.12.5
 pydantic-settings==2.6.1
+email-validator==2.1.0.post1
+typing-extensions>=4.14.1
+python-multipart==0.0.19
 
 # Security / Auth
 python-jose==3.4.0
@@ -30,6 +34,10 @@ mediapipe==0.10.14
 # Gemini SDK
 google-generativeai==0.8.3
 
+# Logging (optional but recommended)
+loguru==0.7.2
+
 # Optional for future AI/ML
 # torch==2.5.1
 # transformers==4.46.2
+

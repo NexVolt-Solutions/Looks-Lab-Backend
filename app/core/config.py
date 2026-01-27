@@ -7,8 +7,8 @@ class Settings(BaseSettings):
     ENV: str = "development"
     APP_NAME: str = "looks-lab"
     APP_URL: Optional[str] = None
-    CORS_ORIGINS: Optional[str] = None  # comma separated
-    TRUSTED_HOSTS: Optional[str] = None  # comma separated
+    CORS_ORIGINS: Optional[str] = None
+    TRUSTED_HOSTS: Optional[str] = None
 
     # Database
     # For local testing, default is provided. Remove default in production.

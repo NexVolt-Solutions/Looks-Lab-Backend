@@ -20,6 +20,11 @@ if config.config_file_name:
 # Target metadata for autogenerate
 target_metadata = Base.metadata
 
+# ✅ Override sqlalchemy.url with DATABASE_URI from environment
+database_url = os.getenv("DATABASE_URI")
+if database_url:
+    config.set_main_option("sqlalchemy.url", database_url)
+
 
 def run_migrations_offline() -> None:
     """Run migrations in offline mode."""
