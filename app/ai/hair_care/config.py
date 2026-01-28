@@ -1,8 +1,12 @@
-from pydantic_settings import BaseSettings
+"""
+Hair care domain AI configuration.
+"""
 
-class HaircareAIConfig(BaseSettings):
-    MIN_ANSWERS_REQUIRED: int = 4
-    REQUIRE_IMAGES: bool = False
+
+class HaircareAIConfig:
+    MIN_ANSWERS_REQUIRED = 4
+    REQUIRE_IMAGES = False
+
 
 config = HaircareAIConfig()
 

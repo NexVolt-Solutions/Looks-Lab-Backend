@@ -1,23 +1,16 @@
 """
 Database transaction management utilities.
 """
-from contextlib import contextmanager
-from typing import Generator
+from contextlib import contextmanager, asynccontextmanager
+from typing import Generator, AsyncGenerator
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.core.logging import logger
 
 
 @contextmanager
 def db_transaction(db: Session) -> Generator[Session, None, None]:
-    """
-    Context manager for database transactions with automatic rollback on error.
-    
-    Usage:
-        with db_transaction(db) as session:
-            # Your database operations
-            session.add(object)
-            # If any exception occurs, rollback is automatic
-    """
     try:
         yield db
         db.commit()
@@ -25,3 +18,15 @@ def db_transaction(db: Session) -> Generator[Session, None, None]:
         db.rollback()
         logger.error(f"Database transaction rolled back: {e}", exc_info=True)
         raise
+
+
+@asynccontextmanager
+async def async_db_transaction(db: AsyncSession) -> AsyncGenerator[AsyncSession, None]:
+    try:
+        yield db
+        await db.commit()
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Async database transaction rolled back: {e}", exc_info=True)
+        raise
+

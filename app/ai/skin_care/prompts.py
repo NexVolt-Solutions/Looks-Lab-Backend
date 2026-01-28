@@ -1,8 +1,9 @@
+"""
+Skin care domain AI prompts.
+"""
+
+
 def build_context(answers: list[dict], images: list[dict]) -> dict:
-    """
-    answers: [{step: "hydration", question: "...", answer: "Low"}, ...]
-    images: [{view: "front", url: "s3://..."}, ...]
-    """
     return {
         "answers": [
             {
@@ -23,11 +24,6 @@ def build_context(answers: list[dict], images: list[dict]) -> dict:
 
 
 def prompt_skincare_full(context: dict) -> str:
-    """
-    Request STRICT JSON for attributes, health, concerns, routine, remedies, products.
-    Includes confidence percentages for attributes, health, and concerns.
-    Products no longer include image_url (handled statically).
-    """
     return f"""
 You are an expert skincare assistant. Use the user's answers and optional images to produce a concise, safe plan.
 

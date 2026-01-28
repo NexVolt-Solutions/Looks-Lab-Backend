@@ -1,3 +1,8 @@
+"""
+Fashion domain AI prompts.
+"""
+
+
 def prompt_fashion_full(context: dict) -> str:
     return f"""
 You are an expert fashion assistant. Use the user's answers and body scans to generate a personalized style profile.

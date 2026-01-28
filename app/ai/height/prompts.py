@@ -1,3 +1,8 @@
+"""
+Height domain AI prompts.
+"""
+
+
 def prompt_height_full(context: dict) -> str:
     return f"""
 You are a posture and growth optimization AI. Use the user's answers and body scans to generate a personalized height improvement plan.
@@ -21,7 +26,7 @@ Return STRICT JSON ONLY with this schema:
     "evening": [
       "Spine Decompression — 5 min",
       "Wall Angles — 5 min",
-      "Child’s Pose — 5 min",
+      "Child's Pose — 5 min",
       "Leg Stretches — 5 min"
     ]
   }},

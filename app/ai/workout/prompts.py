@@ -1,3 +1,8 @@
+"""
+Workout domain AI prompts.
+"""
+
+
 def prompt_workout_full(context: dict) -> str:
     return f"""
 You are a certified fitness coach AI. Use the user's answers to generate a personalized workout plan.

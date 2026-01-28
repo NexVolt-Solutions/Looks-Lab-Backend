@@ -1,3 +1,8 @@
+"""
+Diet domain AI prompts.
+"""
+
+
 def prompt_diet_full(context: dict) -> str:
     return f"""
 You are a certified nutritionist AI. Use the user's answers and food scans to generate a personalized diet plan.
@@ -44,3 +49,4 @@ Return STRICT JSON ONLY with this schema:
 User context:
 {context}
 """
+

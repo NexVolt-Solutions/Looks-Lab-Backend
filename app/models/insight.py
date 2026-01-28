@@ -1,3 +1,6 @@
+"""
+Insight model.
+"""
 from datetime import datetime
 from enum import Enum
 from sqlalchemy import String, DateTime, ForeignKey, func, JSON, Index
@@ -13,7 +16,7 @@ class InsightCategory(str, Enum):
     quit_porn = "quit porn"
     diet = "diet"
     height = "height"
-    fitness = "facial"
+    facial = "facial"
 
 
 class Insight(Base):
@@ -30,13 +33,8 @@ class Insight(Base):
         index=True
     )
 
-    # Controlled category (enum for consistency)
     category: Mapped[InsightCategory] = mapped_column(String(50), nullable=False, index=True)
-
-    # Insight content (AI output: text or structured JSON)
     content: Mapped[dict | str] = mapped_column(JSON, nullable=False)
-
-    # Optional source (e.g. "ai", "manual", "external_api")
     source: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(

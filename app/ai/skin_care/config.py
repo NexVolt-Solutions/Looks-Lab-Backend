@@ -1,8 +1,12 @@
-from pydantic_settings import BaseSettings
+"""
+Skin care domain AI configuration.
+"""
 
-class SkincareAIConfig(BaseSettings):
-    MIN_ANSWERS_REQUIRED: int = 6
-    REQUIRE_IMAGES: bool = True
+
+class SkincareAIConfig:
+    MIN_ANSWERS_REQUIRED = 6
+    REQUIRE_IMAGES = True
+
 
 config = SkincareAIConfig()
 

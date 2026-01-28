@@ -1,4 +1,9 @@
+"""
+Base schemas.
+Common base models used across the application.
+"""
 from pydantic import BaseModel, EmailStr
+
 
 class UserBase(BaseModel):
     id: int

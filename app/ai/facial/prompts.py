@@ -1,3 +1,8 @@
+"""
+Facial domain AI prompts.
+"""
+
+
 def prompt_facial_full(context: dict) -> str:
     return f"""
 You are a facial analysis and grooming AI. Use the user's answers and face scans to generate a personalized improvement plan.

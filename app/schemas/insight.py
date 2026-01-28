@@ -1,13 +1,18 @@
+"""
+Insight schemas.
+Pydantic models for AI-generated insights.
+"""
 from pydantic import BaseModel
 from datetime import datetime
-from typing import Optional, Union, Dict, Any
+from typing import Any
+
 from app.models.insight import InsightCategory
 
 
 class InsightBase(BaseModel):
     category: InsightCategory
-    content: Union[str, Dict[str, Any]]
-    source: Optional[str] = None
+    content: str | dict[str, Any]
+    source: str | None = None
 
 
 class InsightCreate(InsightBase):
@@ -15,16 +20,16 @@ class InsightCreate(InsightBase):
 
 
 class InsightUpdate(BaseModel):
-    category: Optional[InsightCategory] = None
-    content: Optional[Union[str, Dict[str, Any]]] = None
-    source: Optional[str] = None
+    category: InsightCategory | None = None
+    content: str | dict[str, Any] | None = None
+    source: str | None = None
 
 
 class InsightOut(InsightBase):
     id: int
     user_id: int
     created_at: datetime
-    updated_at: Optional[datetime] = None
+    updated_at: datetime | None = None
 
     model_config = {"from_attributes": True}
 

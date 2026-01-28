@@ -1,34 +1,37 @@
+"""
+User schemas.
+Pydantic models for user profile management.
+"""
 from pydantic import BaseModel
 from datetime import datetime
-from typing import Optional
+
 from app.schemas.base import UserBase
 from app.schemas.subscription import SubscriptionOut
 
 
 class UserCreate(BaseModel):
     email: str
-    name: Optional[str] = None
+    name: str | None = None
     notifications_enabled: bool = True
 
 
 class UserUpdate(BaseModel):
-    name: Optional[str] = None
-    age: Optional[int] = None
-    gender: Optional[str] = None
-    profile_image: Optional[str] = None
-    notifications_enabled: Optional[bool] = None
+    name: str | None = None
+    age: int | None = None
+    gender: str | None = None
+    profile_image: str | None = None
+    notifications_enabled: bool | None = None
 
 
 class UserOut(UserBase):
-    name: Optional[str] = None
-    age: Optional[int] = None
-    gender: Optional[str] = None
-    profile_image: Optional[str] = None
+    name: str | None = None
+    age: int | None = None
+    gender: str | None = None
+    profile_image: str | None = None
     notifications_enabled: bool
     created_at: datetime
-    updated_at: Optional[datetime] = None
-
-    subscription: Optional[SubscriptionOut] = None
+    updated_at: datetime | None = None
+    subscription: SubscriptionOut | None = None
 
     model_config = {"from_attributes": True}
 

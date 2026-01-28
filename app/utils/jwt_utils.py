@@ -1,42 +1,59 @@
+"""
+JWT authentication utilities.
+Handles token creation, validation, and user authentication.
+"""
 from jose import jwt, JWTError, ExpiredSignatureError
 from datetime import datetime, timedelta, timezone
 from fastapi import HTTPException, status, Depends
 from fastapi.security import OAuth2PasswordBearer
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from uuid import uuid4
 
 from app.core.config import settings
-from app.core.database import get_db
+from app.core.database import get_async_db
 from app.models.user import User
 
-# ---------------------------
-# Config
-# ---------------------------
-SECRET = settings.JWT_SECRET
-ALGORITHM = settings.JWT_ALGORITHM
-EXPIRATION_MINUTES = settings.JWT_EXPIRATION_MINUTES
-REFRESH_DAYS = settings.REFRESH_TOKEN_EXPIRATION_DAYS
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/v1/auth/google")
 
-# ---------------------------
-# Internal Helpers
-# ---------------------------
-def _create_token(data: dict, expires_minutes: int) -> str:
+
+# ============================================================
+# Token Creation & Validation
+# ============================================================
+
+def create_access_token(data: dict) -> str:
     """
-    Create a JWT with an expiration timestamp.
+    Create a short-lived JWT access token.
+
+    Args:
+        data: Payload to encode (typically user_id and email)
+
+    Returns:
+        Encoded JWT string
     """
     to_encode = data.copy()
     now = datetime.now(timezone.utc)
-    expire = now + timedelta(minutes=expires_minutes)
+    expire = now + timedelta(minutes=settings.JWT_EXPIRATION_MINUTES)
     to_encode.update({"exp": expire, "iat": now})
-    return jwt.encode(to_encode, SECRET, algorithm=ALGORITHM)
+
+    return jwt.encode(to_encode, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
 
 
-def _decode_token(token: str) -> dict:
+def decode_access_token(token: str) -> dict:
     """
-    Decode and validate a JWT, raising proper HTTP errors.
+    Decode and validate a JWT access token.
+
+    Args:
+        token: JWT string
+
+    Returns:
+        Decoded payload
+
+    Raises:
+        HTTPException: If token expired or invalid
     """
     try:
-        return jwt.decode(token, SECRET, algorithms=[ALGORITHM])
+        return jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
     except ExpiredSignatureError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -48,51 +65,72 @@ def _decode_token(token: str) -> dict:
             detail="Invalid token",
         )
 
-# ---------------------------
-# Access Token
-# ---------------------------
-def create_access_token(data: dict) -> str:
-    """Create a short-lived access token."""
-    return _create_token(data, expires_minutes=EXPIRATION_MINUTES)
 
-
-def decode_access_token(token: str) -> dict:
-    """Decode and validate an access token."""
-    return _decode_token(token)
-
-# ---------------------------
-# Refresh Token
-# ---------------------------
 def create_refresh_token() -> str:
-    """Generate a secure opaque refresh token."""
+    """
+    Generate a secure opaque refresh token.
+
+    Returns:
+        UUID string
+    """
     return str(uuid4())
 
 
 def get_refresh_expiry() -> datetime:
-    """Return UTC expiry timestamp for refresh token."""
-    return datetime.now(timezone.utc) + timedelta(days=REFRESH_DAYS)
+    """
+    Calculate refresh token expiry timestamp.
+
+    Returns:
+        UTC datetime for expiration
+    """
+    return datetime.now(timezone.utc) + timedelta(days=settings.REFRESH_TOKEN_EXPIRATION_DAYS)
 
 
 def get_current_time() -> datetime:
-    """Return current UTC timestamp."""
+    """
+    Get current UTC timestamp.
+
+    Returns:
+        Current UTC datetime
+    """
     return datetime.now(timezone.utc)
 
-# ---------------------------
-# User Activation Helper
-# ---------------------------
+
+# ============================================================
+# User Helpers
+# ============================================================
+
 def ensure_user_active(user: User) -> None:
-    """Ensure the user account is active."""
+    """
+    Ensure user account is active.
+
+    Args:
+        user: User object to check/update
+    """
     if not user.is_active:
         user.is_active = True
 
-# ---------------------------
-# FastAPI Dependency
-# ---------------------------
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/google")  # adjust if needed
 
-def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> User:
+# ============================================================
+# FastAPI Dependency (Async)
+# ============================================================
+
+async def get_current_user(
+        token: str = Depends(oauth2_scheme),
+        db: AsyncSession = Depends(get_async_db)
+) -> User:
     """
-    Dependency that extracts the current user from the JWT access token.
+    Extract and validate current user from JWT token.
+
+    Args:
+        token: JWT access token from Authorization header
+        db: Async database session
+
+    Returns:
+        User object
+
+    Raises:
+        HTTPException: If token invalid or user not found
     """
     payload = decode_access_token(token)
     user_id = payload.get("user_id")
@@ -103,7 +141,9 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
             detail="Invalid token payload",
         )
 
-    user = db.query(User).filter(User.id == int(user_id)).first()
+    result = await db.execute(select(User).where(User.id == int(user_id)))
+    user = result.scalar_one_or_none()
+
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

@@ -1,25 +1,30 @@
+"""
+Domain schemas.
+Pydantic models for domain questionnaire flows and AI processing.
+"""
 from datetime import datetime
-from typing import Optional, List, Dict, Any, Union
 from pydantic import BaseModel, ConfigDict
-from app.models.domain import QuestionType   # reuse enum
+from typing import Any
+
+from app.models.domain import QuestionType
 from app.schemas.subscription import SubscriptionStatus
 
-AnswerType = Union[str, int, float, List[str], Dict[str, Any], None]
+AnswerType = str | int | float | list[str] | dict[str, Any] | None
 
 
 class DomainQuestionBase(BaseModel):
     domain: str
     question: str
     type: QuestionType
-    options: Optional[List[str]] = None
-    constraints: Optional[Dict[str, Any]] = None
+    options: list[str] | None = None
+    constraints: dict[str, Any] | None = None
 
 
 class DomainQuestionOut(DomainQuestionBase):
     id: int
-    seq: Optional[int] = None
+    seq: int | None = None
     created_at: datetime
-    updated_at: Optional[datetime] = None
+    updated_at: datetime | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -27,7 +32,7 @@ class DomainQuestionOut(DomainQuestionBase):
 class DomainAnswerBase(BaseModel):
     user_id: int
     question_id: int
-    answer: Optional[AnswerType] = None
+    answer: AnswerType = None
 
 
 class DomainAnswerCreate(DomainAnswerBase):
@@ -38,8 +43,8 @@ class DomainAnswerOut(DomainAnswerBase):
     id: int
     domain: str
     created_at: datetime
-    completed_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
+    completed_at: datetime | None = None
+    updated_at: datetime | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -47,38 +52,34 @@ class DomainAnswerOut(DomainAnswerBase):
 class DomainProgressOut(BaseModel):
     user_id: int
     domain: str
-    progress: Dict[str, Any]
-    answered_questions: List[int]
+    progress: dict[str, Any]
+    answered_questions: list[int]
     total_questions: int
-    progress_percent: Optional[float] = None
-    subscription_status: Optional[SubscriptionStatus] = None
+    progress_percent: float | None = None
+    subscription_status: SubscriptionStatus | None = None
 
 
 class DomainFlowOut(BaseModel):
     status: str
-    current: Optional[DomainQuestionOut] = None
-    next: Optional[DomainQuestionOut] = None
+    current: DomainQuestionOut | None = None
+    next: DomainQuestionOut | None = None
     progress: DomainProgressOut
-    redirect: Optional[str] = None
+    redirect: str | None = None
 
-    # -------------------------------
-    # AI Output Fields
-    # -------------------------------
-    ai_attributes: Optional[Dict[str, Any]] = None
-    ai_health: Optional[Dict[str, Any]] = None
-    ai_concerns: Optional[List[str]] = None
-    ai_routine: Optional[Dict[str, Any]] = None
-    ai_remedies: Optional[List[str]] = None
-    ai_products: Optional[List[Dict[str, Any]]] = None
-    ai_recovery: Optional[Dict[str, Any]] = None
-    ai_progress: Optional[Dict[str, Any]] = None
-    ai_message: Optional[str] = None
-    ai_features: Optional[Dict[str, Any]] = None
-    ai_exercises: Optional[List[Dict[str, Any]]] = None
+    ai_attributes: dict[str, Any] | None = None
+    ai_health: dict[str, Any] | None = None
+    ai_concerns: list[str] | None = None
+    ai_routine: dict[str, Any] | None = None
+    ai_remedies: list[str] | None = None
+    ai_products: list[dict[str, Any]] | None = None
+    ai_recovery: dict[str, Any] | None = None
+    ai_progress: dict[str, Any] | None = None
+    ai_message: str | None = None
+    ai_features: dict[str, Any] | None = None
+    ai_exercises: list[dict[str, Any]] | None = None
 
 
 class DomainSelectionResponse(BaseModel):
-    """Response model for domain selection."""
     status: str
-    domain: Optional[str] = None
+    domain: str | None = None
 

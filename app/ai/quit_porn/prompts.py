@@ -1,3 +1,8 @@
+"""
+Quit porn domain AI prompts.
+"""
+
+
 def prompt_quit_porn_full(context: dict) -> str:
     return f"""
 You are a behavioral wellness AI helping users reduce or quit porn. Use their answers to generate a safe, structured recovery plan.
@@ -45,7 +50,7 @@ Return STRICT JSON ONLY with this schema:
       "Connected with someone"
     ]
   }},
-  "motivational_message": "One day at a time. That’s all you need to focus on. Keep going!"
+  "motivational_message": "One day at a time. That's all you need to focus on. Keep going!"
 }}
 
 User context:
