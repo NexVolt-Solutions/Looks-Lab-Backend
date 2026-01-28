@@ -1,8 +1,7 @@
-# ===== Builder stage =====
 FROM python:3.12-slim AS builder
+
 WORKDIR /app
 
-# Install build dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     gcc \
@@ -12,28 +11,34 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies
 COPY requirements.txt .
-RUN pip install --upgrade pip && pip install --prefix=/install -r requirements.txt
+RUN pip install --upgrade pip && \
+    pip install --prefix=/install -r requirements.txt
 
-# Copy source
 COPY . .
 
-# ===== Runtime stage =====
+
 FROM python:3.12-slim
+
 WORKDIR /app
 
-# Copy installed packages from builder
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq5 \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY --from=builder /install /usr/local
-# Copy app source
-COPY . .
+COPY --from=builder /app /app
 
-# Add wait-for-db script
-COPY scripts/wait_for_db.py /app/scripts/wait_for_db.py
+RUN useradd -m -u 1000 appuser && \
+    chown -R appuser:appuser /app
 
-# Expose FastAPI port
+USER appuser
+
 EXPOSE 8000
 
-# Default command (can be overridden in docker-compose)
-CMD ["bash", "-c", "python scripts/wait_for_db.py && alembic upgrade head && gunicorn -k uvicorn.workers.UvicornWorker app.main:app --bind 0.0.0.0:8000 --workers 3 --timeout 120"]
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+CMD ["bash", "-c", "python scripts/wait_for_db.py && alembic upgrade head && gunicorn -k uvicorn.workers.UvicornWorker app.main:app --bind 0.0.0.0:8000 --workers 3 --timeout 120 --access-logfile - --error-logfile -"]
 

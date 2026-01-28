@@ -1,5 +1,5 @@
 from logging.config import fileConfig
-from sqlalchemy import engine_from_config, pool
+from sqlalchemy import engine_from_config, pool, create_engine
 from alembic import context
 import os
 import sys
@@ -20,10 +20,12 @@ if config.config_file_name:
 # Target metadata for autogenerate
 target_metadata = Base.metadata
 
-# ✅ Override sqlalchemy.url with DATABASE_URI from environment
+#  Override sqlalchemy.url with DATABASE_URI from environment
 database_url = os.getenv("DATABASE_URI")
 if database_url:
-    config.set_main_option("sqlalchemy.url", database_url)
+    # Strip async driver for migrations
+    sync_url = database_url.replace("postgresql+asyncpg://", "postgresql://")
+    config.set_main_option("sqlalchemy.url", sync_url)
 
 
 def run_migrations_offline() -> None:

@@ -7,6 +7,7 @@ gunicorn==23.0.0
 sqlalchemy==2.0.36
 alembic==1.13.2
 psycopg2-binary==2.9.9
+asyncpg==0.29.0
 
 # Environment & Config
 python-dotenv==1.0.1
@@ -34,10 +35,10 @@ mediapipe==0.10.14
 # Gemini SDK
 google-generativeai==0.8.3
 
-# Logging (optional but recommended)
-loguru==0.7.2
+# AWS SDK for S3 storage
+boto3==1.35.76
+botocore==1.35.76
 
-# Optional for future AI/ML
-# torch==2.5.1
-# transformers==4.46.2
+# Logging
+loguru==0.7.2
 

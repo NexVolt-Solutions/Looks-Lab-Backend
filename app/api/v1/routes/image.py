@@ -1,116 +1,189 @@
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+"""
+Image routes.
+Handles image upload, retrieval, and management.
+"""
+from fastapi import APIRouter, Depends, UploadFile, File, Query
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.database import get_db
+from app.core.database import get_async_db
 from app.models.user import User
-from app.schemas.image import ImageCreate, ImageUpdate, ImageOut
+from app.models.image import ImageStatus, ImageType
+from app.schemas.image import ImageOut, ImageUpdate
+from app.services.image_service import ImageService
 from app.utils.jwt_utils import get_current_user
-from app.utils.image_utils import (
-    create_image_entry,
-    get_image_status,
-    update_image_entry,
-    delete_image_record,
-)
 
 router = APIRouter()
 
 
-# --------------------------- # POST Upload Image # ---------------------------
 @router.post("/", response_model=ImageOut)
-def upload_image(
-    payload: ImageCreate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+async def upload_image(
+        file: UploadFile = File(...),
+        domain: str | None = None,
+        view: str | None = None,
+        image_type: ImageType = ImageType.uploaded,
+        db: AsyncSession = Depends(get_async_db),
+        current_user: User = Depends(get_current_user),
 ):
-    """
-    Register a new image record (uploaded or generated) for the authenticated user.
-    Supports domain and view metadata (e.g. diet/meal, diet/barcode, skincare/front).
-    """
-    payload.user_id = current_user.id
-    return create_image_entry(payload, db)
+    image_service = ImageService(db)
+
+    return await image_service.upload_image(
+        file=file,
+        user_id=current_user.id,
+        domain=domain,
+        view=view,
+        image_type=image_type
+    )
 
 
-# --------------------------- # POST Scan Food (Diet) # ---------------------------
 @router.post("/diet/scan-food", response_model=ImageOut)
-def scan_food(
-    payload: ImageCreate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+async def scan_food(
+        file: UploadFile = File(...),
+        db: AsyncSession = Depends(get_async_db),
+        current_user: User = Depends(get_current_user),
 ):
-    """Register a food image (meal photo) for diet tracking."""
-    payload.user_id = current_user.id
-    payload.domain = "diet"
-    payload.view = "meal"
-    return create_image_entry(payload, db)
+    image_service = ImageService(db)
+
+    return await image_service.upload_image(
+        file=file,
+        user_id=current_user.id,
+        domain="diet",
+        view="meal",
+        image_type=ImageType.uploaded
+    )
 
 
-# --------------------------- # POST Scan Barcode (Diet) # ---------------------------
 @router.post("/diet/scan-barcode", response_model=ImageOut)
-def scan_barcode(
-    payload: ImageCreate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+async def scan_barcode(
+        file: UploadFile = File(...),
+        db: AsyncSession = Depends(get_async_db),
+        current_user: User = Depends(get_current_user),
 ):
-    """Register a barcode image for diet tracking."""
-    payload.user_id = current_user.id
-    payload.domain = "diet"
-    payload.view = "barcode"
-    return create_image_entry(payload, db)
+    image_service = ImageService(db)
+
+    return await image_service.upload_image(
+        file=file,
+        user_id=current_user.id,
+        domain="diet",
+        view="barcode",
+        image_type=ImageType.uploaded
+    )
 
 
-# --------------------------- # POST Upload Gallery Image (Diet) # ---------------------------
 @router.post("/diet/gallery", response_model=ImageOut)
-def upload_gallery_image(
-    payload: ImageCreate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+async def upload_diet_gallery(
+        file: UploadFile = File(...),
+        db: AsyncSession = Depends(get_async_db),
+        current_user: User = Depends(get_current_user),
 ):
-    """Register a gallery image for diet tracking."""
-    payload.user_id = current_user.id
-    payload.domain = "diet"
-    payload.view = "gallery"
-    return create_image_entry(payload, db)
+    image_service = ImageService(db)
+
+    return await image_service.upload_image(
+        file=file,
+        user_id=current_user.id,
+        domain="diet",
+        view="gallery",
+        image_type=ImageType.uploaded
+    )
 
 
-# --------------------------- # GET Image by ID # ---------------------------
 @router.get("/{image_id}", response_model=ImageOut)
-def get_image(
-    image_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+async def get_image(
+        image_id: int,
+        db: AsyncSession = Depends(get_async_db),
+        current_user: User = Depends(get_current_user),
 ):
-    """Fetch a single image by ID, only if it belongs to the authenticated user."""
-    image = get_image_status(current_user.id, image_id, db)
-    if not image or image.user_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Not authorized to access this image")
-    return image
+    image_service = ImageService(db)
+    return await image_service.get_image(image_id, current_user.id)
 
 
-# --------------------------- # PATCH Update Image # ---------------------------
+@router.get("/", response_model=list[ImageOut])
+async def get_my_images(
+        domain: str | None = Query(None),
+        view: str | None = Query(None),
+        status: ImageStatus | None = Query(None),
+        db: AsyncSession = Depends(get_async_db),
+        current_user: User = Depends(get_current_user),
+):
+    image_service = ImageService(db)
+
+    return await image_service.get_user_images(
+        user_id=current_user.id,
+        domain=domain,
+        view=view,
+        status=status
+    )
+
+
+@router.get("/{image_id}/url")
+async def get_image_url(
+        image_id: int,
+        expires_in: int = Query(3600),
+        db: AsyncSession = Depends(get_async_db),
+        current_user: User = Depends(get_current_user),
+):
+    image_service = ImageService(db)
+
+    image = await image_service.get_image(image_id, current_user.id)
+    url = image_service.get_image_url(image, expires_in)
+
+    return {
+        "image_id": image_id,
+        "url": url,
+        "expires_in": expires_in
+    }
+
+
 @router.patch("/{image_id}", response_model=ImageOut)
-def update_image(
-    image_id: int,
-    payload: ImageUpdate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+async def update_image(
+        image_id: int,
+        payload: ImageUpdate,
+        db: AsyncSession = Depends(get_async_db),
+        current_user: User = Depends(get_current_user),
 ):
-    """Update analysis result, domain, view, or status for an image if it belongs to the authenticated user."""
-    image = get_image_status(current_user.id, image_id, db)
-    if not image or image.user_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Not authorized to update this image")
-    return update_image_entry(image_id, payload, db)
+    image_service = ImageService(db)
+    return await image_service.update_image(image_id, current_user.id, payload)
 
 
-# --------------------------- # DELETE Image # ---------------------------
 @router.delete("/{image_id}")
-def delete_image(
-    image_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+async def delete_image(
+        image_id: int,
+        db: AsyncSession = Depends(get_async_db),
+        current_user: User = Depends(get_current_user),
 ):
-    """Delete an image record if it belongs to the authenticated user."""
-    image = get_image_status(current_user.id, image_id, db)
-    if not image or image.user_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Not authorized to delete this image")
-    return delete_image_record(image_id, db)
+    image_service = ImageService(db)
+    await image_service.delete_image(image_id, current_user.id)
+
+    return {
+        "status": "deleted",
+        "image_id": image_id,
+        "message": "Image deleted successfully"
+    }
+
+
+@router.patch("/{image_id}/processed", response_model=ImageOut)
+async def mark_image_processed(
+        image_id: int,
+        analysis_result: dict | str,
+        db: AsyncSession = Depends(get_async_db),
+        current_user: User = Depends(get_current_user),
+):
+    image_service = ImageService(db)
+
+    await image_service.get_image(image_id, current_user.id)
+
+    return await image_service.mark_processed(image_id, analysis_result)
+
+
+@router.patch("/{image_id}/failed", response_model=ImageOut)
+async def mark_image_failed(
+        image_id: int,
+        error_message: str | None = None,
+        db: AsyncSession = Depends(get_async_db),
+        current_user: User = Depends(get_current_user),
+):
+    image_service = ImageService(db)
+
+    await image_service.get_image(image_id, current_user.id)
+
+    return await image_service.mark_failed(image_id, error_message)
 

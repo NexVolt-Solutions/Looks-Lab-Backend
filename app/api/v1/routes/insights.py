@@ -1,78 +1,74 @@
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+"""
+Insights routes.
+Handles AI-generated insight operations (CRUD).
+"""
+from fastapi import APIRouter, Depends
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.database import get_db
+from app.core.database import get_async_db
 from app.models.user import User
 from app.schemas.insight import InsightCreate, InsightUpdate, InsightOut
+from app.services.insight_service import InsightService
 from app.utils.jwt_utils import get_current_user
-from app.utils.insight_utils import (
-    create_insight_entry,
-    get_insight_or_404,
-    get_user_insights,
-    update_insight_record,
-    delete_insight_record,
-)
 
 router = APIRouter()
 
 
 @router.post("/", response_model=InsightOut)
-def create_insight(
-    payload: InsightCreate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+async def create_insight(
+        payload: InsightCreate,
+        db: AsyncSession = Depends(get_async_db),
+        current_user: User = Depends(get_current_user),
 ):
-    """Create a new insight for the authenticated user."""
-    # Force the insight to belong to the logged-in user
+    insight_service = InsightService(db)
+
     payload.user_id = current_user.id
-    return create_insight_entry(payload, db)
+
+    return await insight_service.create_insight(payload)
 
 
 @router.get("/{insight_id}", response_model=InsightOut)
-def get_insight(
-    insight_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+async def get_insight(
+        insight_id: int,
+        db: AsyncSession = Depends(get_async_db),
+        current_user: User = Depends(get_current_user),
 ):
-    """Fetch a single insight by ID, only if it belongs to the authenticated user."""
-    insight = get_insight_or_404(insight_id, db)
-    if insight.user_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Not authorized to access this insight")
-    return insight
+    insight_service = InsightService(db)
+    return await insight_service.get_insight(insight_id, current_user.id)
 
 
 @router.get("/me", response_model=list[InsightOut])
-def get_my_insights(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+async def get_my_insights(
+        db: AsyncSession = Depends(get_async_db),
+        current_user: User = Depends(get_current_user),
 ):
-    """Fetch all insights belonging to the authenticated user."""
-    return get_user_insights(current_user.id, db)
+    insight_service = InsightService(db)
+    return await insight_service.get_user_insights(current_user.id)
 
 
 @router.patch("/{insight_id}", response_model=InsightOut)
-def update_insight(
-    insight_id: int,
-    payload: InsightUpdate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+async def update_insight(
+        insight_id: int,
+        payload: InsightUpdate,
+        db: AsyncSession = Depends(get_async_db),
+        current_user: User = Depends(get_current_user),
 ):
-    """Update content or source of an insight if it belongs to the authenticated user."""
-    insight = get_insight_or_404(insight_id, db)
-    if insight.user_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Not authorized to update this insight")
-    return update_insight_record(insight_id, payload.content, payload.source, db)
+    insight_service = InsightService(db)
+    return await insight_service.update_insight(insight_id, current_user.id, payload)
 
 
 @router.delete("/{insight_id}")
-def delete_insight(
-    insight_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+async def delete_insight(
+        insight_id: int,
+        db: AsyncSession = Depends(get_async_db),
+        current_user: User = Depends(get_current_user),
 ):
-    """Delete an insight record if it belongs to the authenticated user."""
-    insight = get_insight_or_404(insight_id, db)
-    if insight.user_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Not authorized to delete this insight")
-    return delete_insight_record(insight_id, db)
+    insight_service = InsightService(db)
+    await insight_service.delete_insight(insight_id, current_user.id)
+
+    return {
+        "status": "deleted",
+        "insight_id": insight_id,
+        "message": "Insight deleted successfully"
+    }
 

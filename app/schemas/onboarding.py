@@ -1,11 +1,15 @@
+"""
+Onboarding schemas.
+Pydantic models for onboarding session flow and question progression.
+"""
 from datetime import datetime
-from typing import Optional, List, Dict, Union, Any
 from uuid import UUID
 from pydantic import BaseModel, field_validator, model_validator, ConfigDict
+from typing import Any
+
 from app.schemas.subscription import SubscriptionStatus
 
-
-AnswerType = Union[str, int, float, List[str], Dict[str, Any], None]
+AnswerType = str | int | float | list[str] | dict[str, Any] | None
 
 
 class OnboardingQuestionOut(BaseModel):
@@ -13,8 +17,8 @@ class OnboardingQuestionOut(BaseModel):
     step: str
     question: str
     type: str
-    options: Optional[List[str]] = None
-    constraints: Optional[Dict[str, Union[int, float, str]]] = None
+    options: list[str] | None = None
+    constraints: dict[str, int | float | str] | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -22,10 +26,9 @@ class OnboardingQuestionOut(BaseModel):
 class OnboardingAnswerCreate(BaseModel):
     question_id: int
     answer: AnswerType
-
-    question_type: Optional[str] = None
-    question_options: Optional[List[str]] = None
-    question_constraints: Optional[Dict[str, Union[int, float, str]]] = None
+    question_type: str | None = None
+    question_options: list[str] | None = None
+    constraints: dict[str, int | float | str] | None = None
 
     @field_validator("answer", mode="before")
     def validate_not_empty(cls, v):
@@ -38,7 +41,7 @@ class OnboardingAnswerCreate(BaseModel):
         q_type = (self.question_type or "").strip().lower()
         answer = self.answer
         options = self.question_options or []
-        constraints = self.question_constraints or {}
+        constraints = self.constraints or {}
 
         if q_type in ["number", "numeric"]:
             if not isinstance(answer, (int, float)):
@@ -73,11 +76,10 @@ class OnboardingAnswerOut(BaseModel):
     session_id: UUID
     question_id: int
     answer: AnswerType
-    completed_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
-
-    question_type: Optional[str] = None
-    step: Optional[str] = None
+    completed_at: datetime | None = None
+    updated_at: datetime | None = None
+    question_type: str | None = None
+    step: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -85,9 +87,9 @@ class OnboardingAnswerOut(BaseModel):
 class OnboardingProgressOut(BaseModel):
     session_id: UUID
     step: str
-    answered_questions: List[int]
+    answered_questions: list[int]
     total_questions: int
-    progress: Dict[str, Union[int, bool]]
+    progress: dict[str, int | bool]
 
 
 class DomainSelectionOut(BaseModel):
@@ -95,26 +97,25 @@ class DomainSelectionOut(BaseModel):
     selected_domain: str
     subscription_status: SubscriptionStatus
     is_paid: bool
-    payment_confirmed_at: Optional[datetime] = None
+    payment_confirmed_at: datetime | None = None
 
 
 class OnboardingFlowOut(BaseModel):
     status: str
-    current: Optional[OnboardingQuestionOut] = None
-    next: Optional[OnboardingQuestionOut] = None
+    current: OnboardingQuestionOut | None = None
+    next: OnboardingQuestionOut | None = None
     progress: OnboardingProgressOut
-    redirect: Optional[str] = None
+    redirect: str | None = None
 
 
 class OnboardingSessionOut(BaseModel):
     id: UUID
-    user_id: Optional[int] = None
+    user_id: int | None = None
     created_at: datetime
-    updated_at: Optional[datetime] = None
-
-    selected_domain: Optional[str] = None
+    updated_at: datetime | None = None
+    selected_domain: str | None = None
     is_paid: bool
-    payment_confirmed_at: Optional[datetime] = None
+    payment_confirmed_at: datetime | None = None
 
     model_config = ConfigDict(from_attributes=True)
 

@@ -1,18 +1,21 @@
+"""
+Image schemas.
+Pydantic models for image upload and management.
+"""
 from pydantic import BaseModel
 from datetime import datetime
-from typing import Optional, Union, Dict, Any
+from typing import Any
+
 from app.models.image import ImageStatus, ImageType
 
 
 class ImageBase(BaseModel):
     file_path: str
-    image_type: Optional[ImageType] = None
+    image_type: ImageType | None = None
     status: ImageStatus = ImageStatus.pending
-    analysis_result: Optional[Union[str, Dict[str, Any]]] = None
-
-    # NEW fields
-    domain: Optional[str] = None
-    view: Optional[str] = None
+    analysis_result: str | dict[str, Any] | None = None
+    domain: str | None = None
+    view: str | None = None
 
 
 class ImageCreate(ImageBase):
@@ -20,30 +23,25 @@ class ImageCreate(ImageBase):
 
 
 class ImageUpdate(BaseModel):
-    analysis_result: Optional[Union[str, Dict[str, Any]]] = None
-    status: Optional[ImageStatus] = None
-    image_type: Optional[ImageType] = None
-
-    # Allow updating domain/view if needed
-    domain: Optional[str] = None
-    view: Optional[str] = None
+    analysis_result: str | dict[str, Any] | None = None
+    status: ImageStatus | None = None
+    image_type: ImageType | None = None
+    domain: str | None = None
+    view: str | None = None
 
 
 class ImageOut(BaseModel):
     id: int
     user_id: int
     file_path: str
-    image_type: Optional[ImageType] = None
+    image_type: ImageType | None = None
     status: ImageStatus
-    analysis_result: Optional[Union[str, Dict[str, Any]]] = None
-
-    # NEW fields
-    domain: Optional[str] = None
-    view: Optional[str] = None
-
+    analysis_result: str | dict[str, Any] | None = None
+    domain: str | None = None
+    view: str | None = None
     uploaded_at: datetime
-    processed_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
+    processed_at: datetime | None = None
+    updated_at: datetime | None = None
 
     model_config = {"from_attributes": True}
 

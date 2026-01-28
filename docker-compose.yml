@@ -8,33 +8,80 @@ services:
       POSTGRES_USER: looks_lab
       POSTGRES_PASSWORD: lab3344
       POSTGRES_DB: looks_lab
+      POSTGRES_INITDB_ARGS: "-E UTF8"
     ports:
       - "5432:5432"
     volumes:
       - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U looks_lab -d looks_lab"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
     restart: always
+    networks:
+      - lookslab_network
+
+  redis:
+    image: redis:7-alpine
+    container_name: lookslab_redis
+    command: redis-server --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: always
+    networks:
+      - lookslab_network
 
   app:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: lookslab_app
     env_file: .env
     environment:
       ENV: development
-      DATABASE_URI: postgresql://looks_lab:lab3344@db:5432/looks_lab
+      DATABASE_URI: postgresql+asyncpg://looks_lab:lab3344@db:5432/looks_lab
+      REDIS_URL: redis://redis:6379/0
     ports:
       - "8000:8000"
     depends_on:
-      - db
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     volumes:
-      - .:/app
-    command: >
-      bash -c "
-      python scripts/wait_for_db.py &&
-      alembic upgrade head &&
-      gunicorn -k uvicorn.workers.UvicornWorker app.main:app --bind 0.0.0.0:8000 --workers 2 --timeout 120
-      "
+      - ./media:/app/media
+      - ./logs:/app/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
     restart: always
+    networks:
+      - lookslab_network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 volumes:
   db_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  lookslab_network:
+    driver: bridge
 

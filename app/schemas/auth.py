@@ -1,22 +1,26 @@
+"""
+Authentication schemas.
+Pydantic models for auth requests and responses.
+"""
 from pydantic import BaseModel, EmailStr
 from datetime import datetime
-from typing import Optional
+
 from app.schemas.user import UserOut
 from app.schemas.base import UserBase
 
 
 class GoogleAuthSchema(BaseModel):
     id_token: str
-    email: Optional[EmailStr] = None
-    name: Optional[str] = None
-    picture: Optional[str] = None
+    email: EmailStr | None = None
+    name: str | None = None
+    picture: str | None = None
 
 
 class AppleAuthSchema(BaseModel):
     id_token: str
-    email: Optional[EmailStr] = None
-    name: Optional[str] = None
-    picture: Optional[str] = None
+    email: EmailStr | None = None
+    name: str | None = None
+    picture: str | None = None
 
 
 class TokenResponse(BaseModel):
@@ -38,13 +42,12 @@ class RefreshTokenOut(RefreshTokenBase):
     id: int
     user_id: int
     created_at: datetime
-    updated_at: Optional[datetime] = None
-    user: Optional[UserBase] = None
+    updated_at: datetime | None = None
+    user: UserBase | None = None
 
     model_config = {"from_attributes": True}
 
 
 class SignOutResponse(BaseModel):
-    """Response model for sign out endpoint."""
     detail: str
 

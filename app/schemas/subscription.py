@@ -1,7 +1,11 @@
+"""
+Subscription schemas.
+Pydantic models for subscription management.
+"""
 from pydantic import BaseModel
 from datetime import datetime
-from typing import Optional
 from enum import Enum
+
 from app.schemas.base import UserBase
 
 
@@ -20,7 +24,7 @@ class SubscriptionStatus(str, Enum):
 
 class SubscriptionBase(BaseModel):
     plan: PlanType
-    status: Optional[SubscriptionStatus] = None
+    status: SubscriptionStatus | None = None
 
 
 class SubscriptionCreate(SubscriptionBase):
@@ -33,13 +37,11 @@ class SubscriptionOut(BaseModel):
     plan: PlanType
     status: SubscriptionStatus
     start_date: datetime
-    end_date: Optional[datetime] = None
-
+    end_date: datetime | None = None
     created_at: datetime
-    updated_at: Optional[datetime] = None
-
-    payment_id: Optional[str] = None
-    user: Optional[UserBase] = None
+    updated_at: datetime | None = None
+    payment_id: str | None = None
+    user: UserBase | None = None
 
     model_config = {"from_attributes": True}
 
