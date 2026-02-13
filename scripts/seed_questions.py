@@ -16,7 +16,7 @@ def seed_questions():
         db.query(OnboardingQuestion).delete()
         db.query(DomainQuestion).delete()
         db.commit()
-        print("✅ Old questions removed.")
+        print(" Old questions removed.")
 
         inserted = 0
         skipped = 0
