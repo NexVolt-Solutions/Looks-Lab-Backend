@@ -2,12 +2,15 @@ FROM python:3.12-slim AS builder
 
 WORKDIR /app
 
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     gcc \
     libffi-dev \
     libssl-dev \
     libpq-dev \
+    libgl1 \
+    libglib2.0-0 \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
@@ -22,8 +25,11 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 \
+    libgl1 \
+    libglib2.0-0 \
     curl \
     && rm -rf /var/lib/apt/lists/*
 

@@ -38,7 +38,7 @@ Return STRICT JSON ONLY with this schema:
   "health": {{
     "scalp_health": {{ "label": "Healthy|Oily|Dry|Sensitive", "confidence": 0-100 }},
     "breakage": {{ "label": "None|Minimal|Moderate|High", "confidence": 0-100 }},
-    "frizz_dandruff": {{ "label": "None|Mild|Moderate|Severe", "confidence": 0-100 }},
+    "frizz_dryness": {{ "label": "None|Mild|Moderate|Severe", "confidence": 0-100 }},
     "dandruff": {{ "label": "None|Mild|Moderate|Severe", "confidence": 0-100 }}
   }},
   "concerns": {{
@@ -48,47 +48,98 @@ Return STRICT JSON ONLY with this schema:
   }},
   "routine": {{
     "today": [
-      {{ "title": "Gentle Scalp Wash", "description": "Short actionable line" }},
-      {{ "title": "Apply Minoxidil", "description": "Short actionable line" }},
-      {{ "title": "5-Minute Scalp Massage", "description": "Short actionable line" }}
+      {{ "title": "Gentle Scalp Wash", "description": "Removes excess oil and buildup without drying the scalp. Helps maintain a clean and balanced scalp environment." }},
+      {{ "title": "Apply Minoxidil", "description": "Stimulates hair follicles and supports healthy hair growth. Should be applied consistently as recommended by AI." }},
+      {{ "title": "5-Minute Scalp Massage", "description": "Improves blood circulation to hair roots. Enhances nutrient delivery and reduces scalp tension." }}
     ],
     "night": [
-      {{ "title": "Light Scalp Cleanse", "description": "Short actionable line" }},
-      {{ "title": "Soothing Scalp Serum", "description": "Short actionable line" }},
-      {{ "title": "3-Minute Relaxation Massage", "description": "Short actionable line" }}
+      {{ "title": "Light Scalp Cleanse", "description": "Gently removes sweat and daily residue. Keeps scalp fresh without over-cleansing." }},
+      {{ "title": "Apply Soothing Scalp Serum", "description": "Calms scalp irritation and supports overnight repair. Nourishes hair roots while you rest." }},
+      {{ "title": "3-Minute Relaxation Massage", "description": "Relaxes scalp muscles and improves product absorption. Supports healthier hair growth over time." }}
     ]
   }},
   "remedies": [
-    "Aloe Vera Gel — 2-3x/week, patch test",
-    "Green Tea Rinse — cooled, balance oil",
-    "Onion Water — weekly, avoid eyes"
+    {{
+      "name": "Aloe Vera Gel",
+      "steps": [
+        "Use 2-3 times/week",
+        "Soothes scalp, reduces itchiness, controls oil"
+      ]
+    }},
+    {{
+      "name": "Green Tea Scalp Rinse",
+      "steps": [
+        "Prepare cooled green tea and rinse scalp",
+        "Helps balance oil production and adds shine"
+      ]
+    }},
+    {{
+      "name": "Onion Water",
+      "steps": [
+        "Use once weekly",
+        "Supports hair growth and scalp health"
+      ]
+    }}
+  ],
+  "safety_tips": [
+    "Patch test before using new remedies",
+    "Avoid contact with eyes",
+    "Discontinue if irritation occurs"
   ],
   "products": [
     {{
       "name": "Oil-Control Shampoo",
-      "overview": "1-2 lines max",
-      "how_to_use": ["bullet1", "bullet2", "bullet3"],
-      "when_to_use": "AM/PM or frequency",
-      "dont_use_with": ["bullet1", "bullet2"],
+      "tags": ["Product Buildup", "Oily Scalp", "Excess Sebum"],
+      "time_of_day": "AM/PM",
+      "overview": "1-2 lines describing what this product does and why it was AI-selected for this user.",
+      "how_to_use": [
+        "Use 2-3 times per week",
+        "Apply to wet scalp and massage gently",
+        "Rinse thoroughly",
+        "Repeat if needed"
+      ],
+      "when_to_use": "AM or PM (during hair wash)",
+      "dont_use_with": [
+        "Harsh sulfate shampoos",
+        "Overlapping medicated shampoos"
+      ],
       "confidence": 0-100
     }},
     {{
       "name": "Lightweight Scalp Serum",
-      "overview": "1-2 lines max",
-      "how_to_use": ["bullet1", "bullet2", "bullet3"],
-      "when_to_use": "AM/PM or frequency",
-      "dont_use_with": ["bullet1", "bullet2"],
+      "tags": ["Weak Roots", "Scalp Dryness", "Hair Thinning Support"],
+      "time_of_day": "PM",
+      "overview": "1-2 lines describing what this product does and why it was AI-selected for this user.",
+      "how_to_use": [
+        "Apply a few drops directly to the scalp",
+        "Gently massage with fingertips",
+        "Do not rinse"
+      ],
+      "when_to_use": "Daily (AM or PM)",
+      "dont_use_with": [
+        "Alcohol-based scalp products",
+        "Heavy oils layer"
+      ],
       "confidence": 0-100
     }},
     {{
       "name": "Minoxidil Foam",
-      "overview": "1-2 lines max (no dosing)",
-      "how_to_use": ["bullet1", "bullet2", "bullet3"],
-      "when_to_use": "AM/PM or frequency",
-      "dont_use_with": ["bullet1", "bullet2"],
+      "tags": ["Hair Thinning", "Hair Fall", "Low Density Areas"],
+      "time_of_day": "AM/PM",
+      "overview": "1-2 lines describing what this product does and why it was AI-selected for this user.",
+      "how_to_use": [
+        "Apply to clean, dry scalp",
+        "Use only on affected areas",
+        "Wash hands after application"
+      ],
+      "when_to_use": "As recommended by AI (usually once or twice daily)",
+      "dont_use_with": [
+        "Heavy styling products immediately after"
+      ],
       "confidence": 0-100
     }}
-  ]
+  ],
+  "motivational_message": "Consistency is key — your scalp health will improve with daily care!"
 }}
 
 User context:

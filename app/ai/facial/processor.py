@@ -5,28 +5,8 @@ Analyzes facial features and generates personalized exercise plans.
 from typing import Any
 
 from app.ai.gemini_client import run_gemini_json, GeminiError
-from app.ai.facial.prompts import prompt_facial_full
+from app.ai.facial.prompts import prompt_facial_full, build_context
 from app.core.logging import logger
-
-
-def build_context(answers: list[dict], images: list[dict]) -> dict:
-    return {
-        "answers": [
-            {
-                "step": a.get("step"),
-                "question": a.get("question"),
-                "answer": a.get("answer")
-            }
-            for a in answers
-        ],
-        "images": [
-            {
-                "view": i.get("view"),
-                "present": bool(i.get("url"))
-            }
-            for i in images
-        ],
-    }
 
 
 def _get_safe_value(data: dict, key: str, default: Any = None) -> Any:
@@ -34,112 +14,153 @@ def _get_safe_value(data: dict, key: str, default: Any = None) -> Any:
 
 
 def normalize_attributes(data: dict) -> dict[str, str]:
+    """
+    Matches Figma questionnaire screens:
+    Symmetry, Jawline, Cheekbones, Habits, Goal, Time
+    """
     try:
         attributes = _get_safe_value(data, "attributes", {})
 
         return {
             "symmetry": attributes.get("symmetry", "Mostly"),
-            "jawline": attributes.get("jawline", "Medium"),
-            "cheekbones": attributes.get("cheekbones", "Medium"),
-            "habits": attributes.get("habits", "Medium"),
+            "jawline": attributes.get("jawline", "Medium/Slightly Defined"),
+            "cheekbones": attributes.get("cheekbones", "Medium/Normal"),
+            "habits": attributes.get("habits", "Medium/Normal"),
             "feature_goal": attributes.get("feature_goal", "Overall improvement"),
-            "exercise_time": attributes.get("exercise_time", "10-15 min"),
+            "exercise_time": attributes.get("exercise_time", "10-15 minutes"),
         }
     except Exception as e:
         logger.error(f"Error normalizing facial attributes: {str(e)}")
         return {
             "symmetry": "Mostly",
-            "jawline": "Medium",
-            "cheekbones": "Medium",
-            "habits": "Medium",
+            "jawline": "Medium/Slightly Defined",
+            "cheekbones": "Medium/Normal",
+            "habits": "Medium/Normal",
             "feature_goal": "Overall improvement",
-            "exercise_time": "10-15 min",
+            "exercise_time": "10-15 minutes",
         }
 
 
-def normalize_feature_scores(data: dict) -> dict[str, str]:
+def normalize_feature_scores(data: dict) -> dict[str, Any]:
+    """
+    Matches Figma Your Style Profile screen:
+    Overall Score + 7 feature scores with labels
+    (Jawline, Nose, Lips, Cheekbones, Eyes, Ears, Face Shape)
+    """
     try:
         scores = _get_safe_value(data, "feature_scores", {})
 
+        overall_score = scores.get("overall_score", 50)
+        features_raw = scores.get("features", [])
+
+        if not isinstance(features_raw, list):
+            features_raw = []
+
+
+        features = []
+        for f in features_raw:
+            if isinstance(f, dict):
+                features.append({
+                    "name": f.get("name", ""),
+                    "label": f.get("label", ""),
+                    "score": f.get("score", 0)
+                })
+
+
+        if not features:
+            features = [
+                {"name": "Jawline", "label": "Narrow", "score": 75},
+                {"name": "Nose", "label": "Straight", "score": 75},
+                {"name": "Lips", "label": "Medium", "score": 75},
+                {"name": "Cheek bones", "label": "High", "score": 75},
+                {"name": "Eyes", "label": "Almond", "score": 75},
+                {"name": "Ears", "label": "Proportional", "score": 75},
+                {"name": "Face Shape", "label": "Diamond Face Shape", "score": 75},
+            ]
+
         return {
-            "jawline": scores.get("jawline", "75%"),
-            "cheekbones": scores.get("cheekbones", "75%"),
-            "symmetry": scores.get("symmetry", "75%"),
-            "overall": scores.get("overall", "75%"),
-            "face_shape": scores.get("face_shape", "Oval"),
+            "overall_score": overall_score,
+            "features": features
         }
     except Exception as e:
         logger.error(f"Error normalizing facial feature scores: {str(e)}")
         return {
-            "jawline": "75%",
-            "cheekbones": "75%",
-            "symmetry": "75%",
-            "overall": "75%",
-            "face_shape": "Oval",
+            "overall_score": 50,
+            "features": []
         }
 
 
-def normalize_daily_exercises(data: dict) -> list[dict[str, Any]]:
+def normalize_daily_exercises(data: dict) -> dict[str, Any]:
+    """
+    Matches Figma Personalized Exercise screen:
+    Today's Progress count + exercises list
+    Each exercise: seq, title, duration, steps[]
+    """
     try:
-        exercises = _get_safe_value(data, "daily_exercises", [])
+        exercises_raw = _get_safe_value(data, "daily_exercises", [])
 
-        if not isinstance(exercises, list):
-            return []
+        if not isinstance(exercises_raw, list):
+            return {"total": 0, "exercises": []}
 
-        normalized = []
-        for ex in exercises[:5]:
-            if not isinstance(ex, dict):
-                continue
+        exercises = []
+        for item in exercises_raw[:5]:
+            if isinstance(item, dict):
+                steps = item.get("steps", [])
+                exercises.append({
+                    "seq": item.get("seq", len(exercises) + 1),
+                    "title": item.get("title", item.get("name", "Exercise")),
+                    "duration": item.get("duration", "5 min"),
+                    "steps": [str(s) for s in steps if s] if isinstance(steps, list) else []
+                })
 
-            normalized.append({
-                "name": ex.get("name", "Exercise"),
-                "duration": ex.get("duration", "5 min"),
-                "steps": ex.get("steps", []) if isinstance(ex.get("steps"), list) else []
-            })
-
-        return normalized
+        return {
+            "total": len(exercises),
+            "exercises": exercises
+        }
     except Exception as e:
         logger.error(f"Error normalizing facial exercises: {str(e)}")
-        return []
+        return {"total": 0, "exercises": []}
 
 
 def normalize_progress_tracking(data: dict) -> dict[str, Any]:
+    """
+    Matches Figma Your Progress screen:
+    Jawline %, Cheekbones %, Symmetry %,
+    Consistency %, Recovery Checklist
+    """
     try:
         progress = _get_safe_value(data, "progress_tracking", {})
 
-        feature_improvement = progress.get("feature_improvement", {})
-        if not isinstance(feature_improvement, dict):
-            feature_improvement = {}
-
-        checklist = progress.get("checklist", [])
+        checklist = progress.get("recovery_checklist", [])
         if not isinstance(checklist, list):
             checklist = []
 
         return {
+            "jawline_score": progress.get("jawline_score", 78),
+            "cheekbones_score": progress.get("cheekbones_score", 72),
+            "symmetry_score": progress.get("symmetry_score", 75),
             "consistency": progress.get("consistency", "0%"),
-            "feature_improvement": {
-                "jawline": feature_improvement.get("jawline", "75%"),
-                "cheekbones": feature_improvement.get("cheekbones", "75%"),
-                "symmetry": feature_improvement.get("symmetry", "75%"),
-            },
-            "checklist": checklist[:5]
+            "recovery_checklist": [
+                str(item) for item in checklist[:3] if item
+            ]
         }
     except Exception as e:
         logger.error(f"Error normalizing facial progress tracking: {str(e)}")
         return {
+            "jawline_score": 0,
+            "cheekbones_score": 0,
+            "symmetry_score": 0,
             "consistency": "0%",
-            "feature_improvement": {
-                "jawline": "75%",
-                "cheekbones": "75%",
-                "symmetry": "75%",
-            },
-            "checklist": []
+            "recovery_checklist": []
         }
 
 
 def analyze_facial(answers: list[dict], images: list[dict]) -> dict[str, Any] | None:
     try:
-        logger.info(f"Starting facial analysis with {len(answers)} answers and {len(images)} images")
+        logger.info(
+            f"Starting facial analysis with {len(answers)} answers "
+            f"and {len(images)} images"
+        )
 
         context = build_context(answers, images)
         prompt = prompt_facial_full(context)
@@ -155,7 +176,10 @@ def analyze_facial(answers: list[dict], images: list[dict]) -> dict[str, Any] | 
             "feature_scores": normalize_feature_scores(raw),
             "daily_exercises": normalize_daily_exercises(raw),
             "progress_tracking": normalize_progress_tracking(raw),
-            "motivational_message": raw.get("motivational_message", "Keep practicing daily for best results!")
+            "motivational_message": raw.get(
+                "motivational_message",
+                "Small daily facial exercises create noticeable long-term improvements. Keep going!"
+            )
         }
 
         logger.info("Successfully completed facial analysis")

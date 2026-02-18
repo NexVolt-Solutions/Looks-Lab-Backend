@@ -3,6 +3,26 @@ Fashion domain AI prompts.
 """
 
 
+def build_context(answers: list[dict], images: list[dict]) -> dict:
+    return {
+        "answers": [
+            {
+                "step": a.get("step"),
+                "question": a.get("question"),
+                "answer": a.get("answer")
+            }
+            for a in answers
+        ],
+        "images": [
+            {
+                "view": i.get("view"),
+                "present": bool(i.get("url"))
+            }
+            for i in images
+        ],
+    }
+
+
 def prompt_fashion_full(context: dict) -> str:
     return f"""
 You are an expert fashion assistant. Use the user's answers and body scans to generate a personalized style profile.
@@ -11,53 +31,46 @@ Return STRICT JSON ONLY with this schema:
 {{
   "attributes": {{
     "body_type": "Athletic|Slim|Curvy|Average",
-    "body_type_confidence": 0-100,
     "undertone": "Warm|Cool|Neutral",
-    "undertone_confidence": 0-100,
-    "style_goal": "Confidence|Proportions|Body Shape",
-    "style_goal_confidence": 0-100
-  }},
-  "style_profile": {{
     "style": "Classic|Minimal|Street|Relaxed|Smart Casual",
-    "style_confidence": 0-100,
-    "fit_preference": "Loose|Regular|Slim",
-    "fit_confidence": 0-100,
-    "trend_preference": "Always|Sometimes|Classic",
-    "trend_confidence": 0-100,
-    "accessories": "Always|Occasionally|Rarely",
-    "accessories_confidence": 0-100
+    "best_clothing_fits": ["Fitted shirts", "Tapered pants", "Structured blazers"],
+    "styles_to_avoid": ["Oversized fits", "Wide-leg pants", "Bulky layers"],
+    "warm_palette": ["#C8A882", "#8B7355", "#C0622F", "#4A6741", "#C8973C", "#A0522D"],
+    "analyzing_insights": [
+      "Athletic body structure",
+      "Warm skin undertone",
+      "Balanced proportions",
+      "Best fit: Regular",
+      "Strong everyday style"
+    ]
   }},
-  "recommendations": {{
-    "best_fits": ["Fitted shirts", "Tapered pants", "Structured blazers"],
-    "avoid_styles": ["Oversized fits", "Wide-leg pants", "Bulky layers"],
-    "color_palette": ["#D4A373", "#C58940", "#A0522D", "#8B4513", "#F4A460", "#CD853F"]
-  }},
-  "weekly_plan": {{
-    "Monday": "Smart Casual",
-    "Tuesday": "Minimal",
-    "Wednesday": "Classic",
-    "Thursday": "Street",
-    "Friday": "Relaxed",
-    "Saturday": "Casual",
-    "Sunday": "Loungewear"
-  }},
+  "weekly_plan": [
+    {{ "day": "Monday", "theme": "Smart Casual" }},
+    {{ "day": "Tuesday", "theme": "Minimal" }},
+    {{ "day": "Wednesday", "theme": "Classic" }},
+    {{ "day": "Thursday", "theme": "Street" }},
+    {{ "day": "Friday", "theme": "Relaxed" }},
+    {{ "day": "Saturday", "theme": "Casual" }},
+    {{ "day": "Sunday", "theme": "Loungewear" }}
+  ],
   "seasonal_style": {{
-    "Summer": {{
-      "outfits": ["Linen shirts", "Cotton shorts", "Light polo"],
-      "fabrics": ["Linen", "Cotton", "Chambray"],
-      "footwear": ["Loafers", "Canvas sneakers", "Sandals"]
-    }},
-    "Monsoon": {{
-      "outfits": ["Quick-dry shirts", "Cargo pants", "Light jacket"],
-      "fabrics": ["Polyester blend", "Quick-dry cotton", "Nylon"],
+    "summer": {{
+      "outfit_combinations": ["Quick-dry shirts", "Cargo pants", "Light jacket"],
+      "recommended_fabrics": ["Polyester blend", "Quick-dry cotton", "Nylon"],
       "footwear": ["Waterproof boots", "Slip-on sneakers", "Floaters"]
     }},
-    "Winter": {{
-      "outfits": ["Wool sweater", "Corduroy pants", "Layered blazer"],
-      "fabrics": ["Wool", "Cashmere", "Flannel"],
+    "monsoon": {{
+      "outfit_combinations": ["Linen shirts", "Cotton shorts", "Light polo"],
+      "recommended_fabrics": ["Linen", "Cotton", "Chambray"],
+      "footwear": ["Loafers", "Canvas sneakers", "Sandals"]
+    }},
+    "winter": {{
+      "outfit_combinations": ["Wool sweater", "Corduroy pants", "Layered blazer"],
+      "recommended_fabrics": ["Wool", "Cashmere", "Flannel"],
       "footwear": ["Chelsea boots", "Derby shoes", "Suede loafers"]
     }}
-  }}
+  }},
+  "motivational_message": "Your style is your identity. Own it with confidence every day!"
 }}
 
 User context:

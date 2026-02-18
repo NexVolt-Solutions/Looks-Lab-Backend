@@ -1,12 +1,11 @@
 """
 Onboarding utility functions.
-Constants and validation helpers only.
-Business logic moved to app/services/onboarding_service.py
+Constants and validation helpers for onboarding flow.
 """
+from app.enums import DomainEnum
 
-# ============================================================
-# Constants (Can Stay - Used by Service)
-# ============================================================
+
+# ── Constants ─────────────────────────────────────────────────────
 
 ONBOARDING_ORDER = [
     "profile_setup",
@@ -16,34 +15,24 @@ ONBOARDING_ORDER = [
     "experience_planning",
 ]
 
-VALID_DOMAINS = {
-    "skincare",
-    "haircare",
-    "fashion",
-    "workout",
-    "quit porn",
-    "diet",
-    "height",
-    "facial",
-}
 
-
-# ============================================================
-# Validation Helpers (Pure Functions - Can Stay)
-# ============================================================
+# ── Validation ────────────────────────────────────────────────────
 
 def validate_domain(domain: str) -> None:
     """
-    Validate domain name.
+    Validate domain name against allowed domains.
 
     Args:
         domain: Domain name to validate
 
     Raises:
-        ValueError: If domain invalid
+        ValueError: If domain is not in allowed list
     """
-    if domain not in VALID_DOMAINS:
-        raise ValueError(f"Invalid domain. Must be one of: {', '.join(VALID_DOMAINS)}")
+    valid_domains = DomainEnum.values()
+    if domain not in valid_domains:
+        raise ValueError(
+            f"Invalid domain. Must be one of: {', '.join(valid_domains)}"
+        )
 
 
 def get_next_step(current_step: str) -> str | None:
@@ -54,22 +43,15 @@ def get_next_step(current_step: str) -> str | None:
         current_step: Current step name
 
     Returns:
-        Next step name or None if complete
+        Next step name or None if onboarding is complete
     """
     try:
         idx = ONBOARDING_ORDER.index(current_step)
-        return ONBOARDING_ORDER[idx + 1] if idx + 1 < len(ONBOARDING_ORDER) else None
+        return (
+            ONBOARDING_ORDER[idx + 1]
+            if idx + 1 < len(ONBOARDING_ORDER)
+            else None
+        )
     except ValueError:
         return None
 
-# ============================================================
-# DEPRECATED FUNCTIONS
-# ============================================================
-# All database operations have been moved to OnboardingService
-#
-# Migration guide:
-# - Old: from app.utils.onboarding_utils import create_session, save_answer
-# - New: from app.services.onboarding_service import OnboardingService
-#        service = OnboardingService(db)
-#        session = service.create_session(user_id)
-#        question = service.save_answer(session_id, payload)

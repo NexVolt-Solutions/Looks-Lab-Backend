@@ -2,24 +2,29 @@
 JWT authentication utilities.
 Handles token creation, validation, and user authentication.
 """
-from jose import jwt, JWTError, ExpiredSignatureError
 from datetime import datetime, timedelta, timezone
-from fastapi import HTTPException, status, Depends
-from fastapi.security import OAuth2PasswordBearer
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
 from uuid import uuid4
+
+from fastapi import HTTPException, Depends
+from fastapi import status as http_status
+from fastapi.security import OAuth2PasswordBearer
+from jose import jwt, JWTError, ExpiredSignatureError
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.database import get_async_db
 from app.models.user import User
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/v1/auth/google")
 
 
-# ============================================================
-# Token Creation & Validation
-# ============================================================
+oauth2_scheme = OAuth2PasswordBearer(
+    tokenUrl="token",
+    description="Bearer token authentication. Use /auth/google or /auth/apple to obtain tokens."
+)
+
+
+# ── Token Creation & Validation ───────────────────────────────────
 
 def create_access_token(data: dict) -> str:
     """
@@ -36,7 +41,11 @@ def create_access_token(data: dict) -> str:
     expire = now + timedelta(minutes=settings.JWT_EXPIRATION_MINUTES)
     to_encode.update({"exp": expire, "iat": now})
 
-    return jwt.encode(to_encode, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
+    return jwt.encode(
+        to_encode,
+        settings.JWT_SECRET,
+        algorithm=settings.JWT_ALGORITHM
+    )
 
 
 def decode_access_token(token: str) -> dict:
@@ -53,15 +62,19 @@ def decode_access_token(token: str) -> dict:
         HTTPException: If token expired or invalid
     """
     try:
-        return jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
+        return jwt.decode(
+            token,
+            settings.JWT_SECRET,
+            algorithms=[settings.JWT_ALGORITHM]
+        )
     except ExpiredSignatureError:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
+            status_code=http_status.HTTP_401_UNAUTHORIZED,
             detail="Token has expired",
         )
     except JWTError:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
+            status_code=http_status.HTTP_401_UNAUTHORIZED,
             detail="Invalid token",
         )
 
@@ -83,7 +96,9 @@ def get_refresh_expiry() -> datetime:
     Returns:
         UTC datetime for expiration
     """
-    return datetime.now(timezone.utc) + timedelta(days=settings.REFRESH_TOKEN_EXPIRATION_DAYS)
+    return datetime.now(timezone.utc) + timedelta(
+        days=settings.REFRESH_TOKEN_EXPIRATION_DAYS
+    )
 
 
 def get_current_time() -> datetime:
@@ -96,9 +111,7 @@ def get_current_time() -> datetime:
     return datetime.now(timezone.utc)
 
 
-# ============================================================
-# User Helpers
-# ============================================================
+# ── User Helpers ──────────────────────────────────────────────────
 
 def ensure_user_active(user: User) -> None:
     """
@@ -111,13 +124,11 @@ def ensure_user_active(user: User) -> None:
         user.is_active = True
 
 
-# ============================================================
-# FastAPI Dependency (Async)
-# ============================================================
+# ── FastAPI Dependency ────────────────────────────────────────────
 
 async def get_current_user(
-        token: str = Depends(oauth2_scheme),
-        db: AsyncSession = Depends(get_async_db)
+    token: str = Depends(oauth2_scheme),
+    db: AsyncSession = Depends(get_async_db)
 ) -> User:
     """
     Extract and validate current user from JWT token.
@@ -137,16 +148,18 @@ async def get_current_user(
 
     if not user_id:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
+            status_code=http_status.HTTP_401_UNAUTHORIZED,
             detail="Invalid token payload",
         )
 
-    result = await db.execute(select(User).where(User.id == int(user_id)))
+    result = await db.execute(
+        select(User).where(User.id == int(user_id))
+    )
     user = result.scalar_one_or_none()
 
     if not user:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
+            status_code=http_status.HTTP_404_NOT_FOUND,
             detail="User not found",
         )
 
