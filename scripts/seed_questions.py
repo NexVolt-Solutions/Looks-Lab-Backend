@@ -36,14 +36,13 @@ def seed_questions():
         db.query(OnboardingQuestion).delete()
         db.query(DomainQuestion).delete()
         db.commit()
+
         print("Old questions removed.")
 
         inserted = 0
         skipped = 0
 
-        # -------------------------
         # Seed Onboarding Questions
-        # -------------------------
         for step in ONBOARDING_STEPS:
             questions = data.get(step, [])
 
@@ -64,9 +63,7 @@ def seed_questions():
                 )
                 inserted += 1
 
-        # -------------------------
         # Seed Domain Questions
-        # -------------------------
         for domain, questions in data.items():
             if domain in ONBOARDING_STEPS:
                 continue
@@ -102,4 +99,3 @@ def seed_questions():
 
 if __name__ == "__main__":
     seed_questions()
-
