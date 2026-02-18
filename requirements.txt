@@ -25,7 +25,7 @@ slowapi==0.1.9
 
 # Testing
 pytest==8.3.3
-httpx==0.27.2
+pytest-asyncio==0.23.6
 coverage==7.6.1
 
 # AI / Image Processing
@@ -41,4 +41,7 @@ botocore==1.35.76
 
 # Logging
 loguru==0.7.2
+
+# HTTP Client — barcode lookup (Open Food Facts API)
+httpx==0.27.2
 

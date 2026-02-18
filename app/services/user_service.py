@@ -1,13 +1,14 @@
 """
 User service layer.
-Handles user profile operations (CRUD).
+Handles user profile operations (CRUD) and progress tracking.
 """
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func, and_
 from fastapi import HTTPException, status
 
 from app.models.user import User
+from app.models.domain import DomainAnswer
 from app.schemas.user import UserUpdate
 from app.core.logging import logger
 
@@ -93,4 +94,89 @@ class UserService:
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Email verification required"
             )
+
+    # ==================== NEW: WEEKLY PROGRESS ====================
+
+    async def get_weekly_progress(self, user_id: int) -> dict:
+        """
+        Calculate weekly progress from domain question completion.
+
+        Logic:
+        - Get last 7 days (Mon-Sun of current week)
+        - For each day, count how many domain answers
+          were submitted that day
+        - Calculate score as percentage of total
+          domain questions answered up to that day
+
+        Args:
+            user_id: User ID
+
+        Returns:
+            Weekly progress data for chart display
+        """
+        # Get current week's Mon-Sun dates
+        today = datetime.now(timezone.utc).date()
+        # Get Monday of current week
+        monday = today - timedelta(days=today.weekday())
+        week_dates = [monday + timedelta(days=i) for i in range(7)]
+        day_labels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+
+        # Get total domain questions available (for score calculation)
+        from app.models.domain import DomainQuestion
+        total_result = await self.db.execute(
+            select(func.count(DomainQuestion.id))
+        )
+        total_questions = total_result.scalar() or 1  # Avoid division by zero
+
+        # Get all user's domain answers with their completion dates
+        result = await self.db.execute(
+            select(DomainAnswer)
+            .where(DomainAnswer.user_id == user_id)
+            .order_by(DomainAnswer.completed_at.asc())
+        )
+        all_answers = result.scalars().all()
+
+        # Build daily scores
+        days = []
+        scores = []
+
+        for i, (date, label) in enumerate(zip(week_dates, day_labels)):
+            # Count answers completed up to end of this day
+            # This gives cumulative progress
+            end_of_day = datetime.combine(
+                date + timedelta(days=1),
+                datetime.min.time()
+            ).replace(tzinfo=timezone.utc)
+
+            answers_up_to_day = [
+                a for a in all_answers
+                if a.completed_at and a.completed_at < end_of_day
+            ]
+
+            # Calculate score as percentage of total questions
+            score = round(
+                (len(answers_up_to_day) / total_questions) * 100, 1
+            )
+            # Cap at 100
+            score = min(score, 100.0)
+
+            days.append({
+                "day": label,
+                "date": date.strftime("%Y-%m-%d"),
+                "score": score
+            })
+            scores.append(score)
+
+        # Calculate week average
+        week_average = round(sum(scores) / len(scores), 1) if scores else 0.0
+
+        logger.info(f"Calculated weekly progress for user {user_id}")
+
+        return {
+            "user_id": user_id,
+            "labels": day_labels,
+            "scores": scores,
+            "days": days,
+            "week_average": week_average
+        }
 

@@ -1,95 +1,96 @@
 """
 Main FastAPI application entry point.
+Looks Lab API — powered by FastAPI.
 """
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from contextlib import asynccontextmanager
 
 from app.api.v1.api_router import router, health_check
-from app.core import logging, database
 from app.core.config import settings
-from app.core.security import SecurityHeadersMiddleware
-from app.core.rate_limit import create_rate_limit_middleware
+from app.core.database import init_async_db, close_async_db
 from app.core.exceptions import setup_exception_handlers
+from app.core.logging import setup_logging, logger
+from app.core.rate_limit import setup_rate_limiting
 from app.core.request_id import RequestIDMiddleware
+from app.core.security import SecurityHeadersMiddleware
 
+
+# ── Lifespan ──────────────────────────────────────────────────────
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logging.logger.info("Starting Looks Lab API...")
+    """Application startup and shutdown lifecycle."""
+    setup_logging()
+    logger.info("Starting Looks Lab API...")
+    logger.info(f"Environment: {settings.ENV}")
 
-    try:
-        settings.validate_settings()
-        logging.logger.info("Configuration validated successfully")
-    except ValueError as e:
-        logging.logger.error(f"Configuration error: {e}")
-        raise
-
-    await database.init_async_db()
+    await init_async_db()
+    logger.info("Database connection established")
 
     yield
 
-    logging.logger.info("Shutting down Looks Lab API...")
-    await database.close_async_db()
+    logger.info("Shutting down Looks Lab API...")
+    await close_async_db()
+    logger.info("Database connection closed")
 
+
+# ── App Instance ──────────────────────────────────────────────────
 
 app = FastAPI(
     title="Looks Lab API",
     version="1.0.0",
-    description="Backend API for Looks Lab powered by FastAPI",
-    contact={"name": "Looks Lab Team", "email": "support@looks-lab.com"},
+    description="Backend API for Looks Lab — AI-powered personal transformation",
+    contact={
+        "name": "Looks Lab Team",
+        "email": "support@looks-lab.com"
+    },
     lifespan=lifespan,
+
+    docs_url="/docs" if not settings.is_production else None,
+    redoc_url="/redoc" if not settings.is_production else None,
+    openapi_url="/openapi.json" if not settings.is_production else None,
 )
+
+
+# ── Middleware ────────────────────────────────────────────────────
 
 app.add_middleware(RequestIDMiddleware)
 
-if settings.ENABLE_REQUEST_LOGGING:
-    @app.middleware("http")
-    async def request_logging_middleware(request, call_next):
-        request_id = getattr(request.state, "request_id", "unknown")
-        logging.logger.info(
-            "%s %s [Request-ID: %s]",
-            request.method,
-            request.url.path,
-            request_id
-        )
-        return await call_next(request)
-
-cors_origins = settings.cors_origins_list
-if not cors_origins:
-    if settings.is_production:
-        logging.logger.warning("CORS_ORIGINS not set in production - CORS will be disabled")
-        cors_origins = []
-    else:
-        cors_origins = [
-            "http://localhost:3000",
-            "http://localhost:8000",
-            "http://127.0.0.1:3000",
-            "http://127.0.0.1:8000"
-        ]
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=cors_origins,
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["*"],
-    expose_headers=["*"],
-)
+if settings.ENABLE_SECURITY_HEADERS:
+    app.add_middleware(SecurityHeadersMiddleware)
 
 trusted_hosts = settings.trusted_hosts_list
 if trusted_hosts:
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=trusted_hosts)
 
-if settings.ENABLE_SECURITY_HEADERS:
-    app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origins_list,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["*"],
+    expose_headers=["X-Request-ID", "X-Response-Time"],
+)
 
-create_rate_limit_middleware(app)
+
+# ── Rate Limiting ─────────────────────────────────────────────────
+
+setup_rate_limiting(app)
+
+
+# ── Exception Handlers ────────────────────────────────────────────
 
 setup_exception_handlers(app)
 
+
+# ── Routes ────────────────────────────────────────────────────────
+
+# Include all API routes
 app.include_router(router)
 
-app.get("/health", tags=["system"])(health_check)
+# Health check at root level
+app.get("/health", tags=["System"])(health_check)
 

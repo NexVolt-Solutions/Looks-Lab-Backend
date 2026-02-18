@@ -5,28 +5,8 @@ Analyzes user style preferences and generates personalized fashion recommendatio
 from typing import Any
 
 from app.ai.gemini_client import run_gemini_json, GeminiError
-from app.ai.fashion.prompts import prompt_fashion_full
+from app.ai.fashion.prompts import prompt_fashion_full, build_context
 from app.core.logging import logger
-
-
-def build_context(answers: list[dict], images: list[dict]) -> dict:
-    return {
-        "answers": [
-            {
-                "step": a.get("step"),
-                "question": a.get("question"),
-                "answer": a.get("answer")
-            }
-            for a in answers
-        ],
-        "images": [
-            {
-                "view": i.get("view"),
-                "present": bool(i.get("url"))
-            }
-            for i in images
-        ],
-    }
 
 
 def _get_safe_value(data: dict, key: str, default: Any = None) -> Any:
@@ -34,127 +14,123 @@ def _get_safe_value(data: dict, key: str, default: Any = None) -> Any:
 
 
 def normalize_attributes(data: dict) -> dict[str, Any]:
+    """
+    Matches Figma Your Style Profile screen:
+    Body Type, Undertone, Style chips,
+    Best Clothing Fits chips, Styles to Avoid chips,
+    Warm Palette color swatches
+    """
     try:
         attributes = _get_safe_value(data, "attributes", {})
 
+        best_clothing_fits = attributes.get("best_clothing_fits", [])
+        styles_to_avoid = attributes.get("styles_to_avoid", [])
+        warm_palette = attributes.get("warm_palette", [])
+        analyzing_insights = attributes.get("analyzing_insights", [])
+
+        if not isinstance(best_clothing_fits, list):
+            best_clothing_fits = []
+        if not isinstance(styles_to_avoid, list):
+            styles_to_avoid = []
+        if not isinstance(warm_palette, list):
+            warm_palette = []
+        if not isinstance(analyzing_insights, list):
+            analyzing_insights = []
+
         return {
-            "body_type": attributes.get("body_type", "Average"),
-            "body_type_confidence": attributes.get("body_type_confidence", 0),
-            "undertone": attributes.get("undertone", "Neutral"),
-            "undertone_confidence": attributes.get("undertone_confidence", 0),
-            "style_goal": attributes.get("style_goal", "Confidence"),
-            "style_goal_confidence": attributes.get("style_goal_confidence", 0),
+
+            "body_type": attributes.get("body_type", "Athletic"),
+            "undertone": attributes.get("undertone", "Warm"),
+            "style": attributes.get("style", "Classic"),
+
+
+            "best_clothing_fits": best_clothing_fits[:5],
+
+
+            "styles_to_avoid": styles_to_avoid[:5],
+
+
+            "warm_palette": warm_palette[:6],
+
+
+            "analyzing_insights": analyzing_insights[:5],
         }
     except Exception as e:
         logger.error(f"Error normalizing fashion attributes: {str(e)}")
         return {
-            "body_type": "Average",
-            "body_type_confidence": 0,
-            "undertone": "Neutral",
-            "undertone_confidence": 0,
-            "style_goal": "Confidence",
-            "style_goal_confidence": 0,
-        }
-
-
-def normalize_style_profile(data: dict) -> dict[str, Any]:
-    try:
-        profile = _get_safe_value(data, "style_profile", {})
-
-        return {
-            "style": profile.get("style", "Classic"),
-            "style_confidence": profile.get("style_confidence", 0),
-            "fit_preference": profile.get("fit_preference", "Regular"),
-            "fit_confidence": profile.get("fit_confidence", 0),
-            "trend_preference": profile.get("trend_preference", "Sometimes"),
-            "trend_confidence": profile.get("trend_confidence", 0),
-            "accessories": profile.get("accessories", "Occasionally"),
-            "accessories_confidence": profile.get("accessories_confidence", 0),
-        }
-    except Exception as e:
-        logger.error(f"Error normalizing fashion style profile: {str(e)}")
-        return {
+            "body_type": "Athletic",
+            "undertone": "Warm",
             "style": "Classic",
-            "style_confidence": 0,
-            "fit_preference": "Regular",
-            "fit_confidence": 0,
-            "trend_preference": "Sometimes",
-            "trend_confidence": 0,
-            "accessories": "Occasionally",
-            "accessories_confidence": 0,
+            "best_clothing_fits": [],
+            "styles_to_avoid": [],
+            "warm_palette": [],
+            "analyzing_insights": [],
         }
 
 
-def normalize_recommendations(data: dict) -> dict[str, list]:
+def normalize_weekly_plan(data: dict) -> list[dict[str, str]]:
+    """
+    Matches Figma Weekly Plan screen:
+    Mon-Sun with daily style themes
+    """
     try:
-        recommendations = _get_safe_value(data, "recommendations", {})
+        weekly_plan = _get_safe_value(data, "weekly_plan", [])
 
-        best_fits = recommendations.get("best_fits", [])
-        avoid_styles = recommendations.get("avoid_styles", [])
-        color_palette = recommendations.get("color_palette", [])
+        if not isinstance(weekly_plan, list):
 
-        if not isinstance(best_fits, list):
-            best_fits = []
-        if not isinstance(avoid_styles, list):
-            avoid_styles = []
-        if not isinstance(color_palette, list):
-            color_palette = []
+            if isinstance(weekly_plan, dict):
+                days_order = [
+                    "Monday", "Tuesday", "Wednesday",
+                    "Thursday", "Friday", "Saturday", "Sunday"
+                ]
+                weekly_plan = [
+                    {"day": day, "theme": weekly_plan.get(day, "Casual")}
+                    for day in days_order
+                ]
+            else:
+                weekly_plan = []
 
-        return {
-            "best_fits": best_fits[:5],
-            "avoid_styles": avoid_styles[:5],
-            "color_palette": color_palette[:6]
-        }
-    except Exception as e:
-        logger.error(f"Error normalizing fashion recommendations: {str(e)}")
-        return {
-            "best_fits": [],
-            "avoid_styles": [],
-            "color_palette": []
-        }
+        cleaned = []
+        for item in weekly_plan[:7]:
+            if isinstance(item, dict):
+                cleaned.append({
+                    "day": item.get("day", ""),
+                    "theme": item.get("theme", "Casual")
+                })
 
-
-def normalize_weekly_plan(data: dict) -> dict[str, str]:
-    try:
-        plan = _get_safe_value(data, "weekly_plan", {})
-
-        days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-        return {day: plan.get(day, "Casual") for day in days}
+        return cleaned
     except Exception as e:
         logger.error(f"Error normalizing fashion weekly plan: {str(e)}")
-        return {
-            "Monday": "Casual",
-            "Tuesday": "Casual",
-            "Wednesday": "Casual",
-            "Thursday": "Casual",
-            "Friday": "Casual",
-            "Saturday": "Casual",
-            "Sunday": "Casual",
-        }
+        return []
 
 
 def normalize_seasonal_style(data: dict) -> dict[str, dict[str, list]]:
+    """
+    Matches Figma Weekly Plan - Seasonal Style section:
+    Summer / Monsoon / Winter tabs
+    Each with outfit_combinations, recommended_fabrics, footwear chips
+    """
     try:
         seasonal = _get_safe_value(data, "seasonal_style", {})
 
         result = {}
-        for season in ["Summer", "Monsoon", "Winter"]:
+        for season in ["summer", "monsoon", "winter"]:
             season_data = seasonal.get(season, {})
 
-            outfits = season_data.get("outfits", [])
-            fabrics = season_data.get("fabrics", [])
+            outfit_combinations = season_data.get("outfit_combinations", [])
+            recommended_fabrics = season_data.get("recommended_fabrics", [])
             footwear = season_data.get("footwear", [])
 
-            if not isinstance(outfits, list):
-                outfits = []
-            if not isinstance(fabrics, list):
-                fabrics = []
+            if not isinstance(outfit_combinations, list):
+                outfit_combinations = []
+            if not isinstance(recommended_fabrics, list):
+                recommended_fabrics = []
             if not isinstance(footwear, list):
                 footwear = []
 
             result[season] = {
-                "outfits": outfits[:5],
-                "fabrics": fabrics[:5],
+                "outfit_combinations": outfit_combinations[:5],
+                "recommended_fabrics": recommended_fabrics[:5],
                 "footwear": footwear[:5]
             }
 
@@ -162,15 +138,18 @@ def normalize_seasonal_style(data: dict) -> dict[str, dict[str, list]]:
     except Exception as e:
         logger.error(f"Error normalizing fashion seasonal style: {str(e)}")
         return {
-            "Summer": {"outfits": [], "fabrics": [], "footwear": []},
-            "Monsoon": {"outfits": [], "fabrics": [], "footwear": []},
-            "Winter": {"outfits": [], "fabrics": [], "footwear": []}
+            "summer": {"outfit_combinations": [], "recommended_fabrics": [], "footwear": []},
+            "monsoon": {"outfit_combinations": [], "recommended_fabrics": [], "footwear": []},
+            "winter": {"outfit_combinations": [], "recommended_fabrics": [], "footwear": []}
         }
 
 
 def analyze_fashion(answers: list[dict], images: list[dict]) -> dict[str, Any] | None:
     try:
-        logger.info(f"Starting fashion analysis with {len(answers)} answers and {len(images)} images")
+        logger.info(
+            f"Starting fashion analysis with {len(answers)} answers "
+            f"and {len(images)} images"
+        )
 
         context = build_context(answers, images)
         prompt = prompt_fashion_full(context)
@@ -183,10 +162,14 @@ def analyze_fashion(answers: list[dict], images: list[dict]) -> dict[str, Any] |
 
         normalized = {
             "attributes": normalize_attributes(raw),
-            "style_profile": normalize_style_profile(raw),
-            "recommendations": normalize_recommendations(raw),
-            "weekly_plan": normalize_weekly_plan(raw),
-            "seasonal_style": normalize_seasonal_style(raw),
+            "routine": {
+                "weekly_plan": normalize_weekly_plan(raw),
+                "seasonal_style": normalize_seasonal_style(raw),
+            },
+            "motivational_message": raw.get(
+                "motivational_message",
+                "Your style is your identity. Own it with confidence every day!"
+            )
         }
 
         logger.info("Successfully completed fashion analysis")

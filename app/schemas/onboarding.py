@@ -4,8 +4,9 @@ Pydantic models for onboarding session flow and question progression.
 """
 from datetime import datetime
 from uuid import UUID
-from pydantic import BaseModel, field_validator, model_validator, ConfigDict
 from typing import Any
+
+from pydantic import BaseModel, field_validator, model_validator, ConfigDict, Field
 
 from app.schemas.subscription import SubscriptionStatus
 
@@ -89,7 +90,7 @@ class OnboardingProgressOut(BaseModel):
     step: str
     answered_questions: list[int]
     total_questions: int
-    progress: dict[str, int | bool]
+    progress: dict[str, Any]  # ✅ Fixed: allows nested dicts from calculate_progress()
 
 
 class DomainSelectionOut(BaseModel):
@@ -118,4 +119,65 @@ class OnboardingSessionOut(BaseModel):
     payment_confirmed_at: datetime | None = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class OnboardingAnswerWithQuestion(BaseModel):
+    """
+    Onboarding answer with its question context.
+    Used by GET /onboarding/users/me/answers endpoint.
+    """
+    question_id: int
+    question: str = Field(..., description="The question text")
+    step: str = Field(..., description="Which onboarding step this belongs to")
+    answer: AnswerType
+    answered_at: datetime | None = None
+
+
+class OnboardingAnswersResponse(BaseModel):
+    """
+    Full response for GET /onboarding/users/me/answers.
+    Returns all answers with question context.
+    """
+    user_id: int
+    answers: list[OnboardingAnswerWithQuestion]
+
+
+class WellnessMetricsOut(BaseModel):
+    """
+    Wellness metrics extracted from onboarding answers.
+    Used for Home screen wellness overview section.
+
+    Displayed on Home screen as:
+    - Your Height: 5.2 ft
+    - Your Weight: 76 kg
+    - Sleep Hours: 6-7 hours
+    - Water Intake: 1.5-2.5 liters
+    """
+    height: AnswerType = Field(
+        default=None,
+        description="User's height from profile_setup step"
+    )
+    weight: AnswerType = Field(
+        default=None,
+        description="User's weight from profile_setup step"
+    )
+    sleep_hours: AnswerType = Field(
+        default=None,
+        description="Daily sleep hours from daily_lifestyle step"
+    )
+    water_intake: AnswerType = Field(
+        default=None,
+        description="Daily water intake from daily_lifestyle step"
+    )
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "height": "5.2 ft",
+                "weight": "76 kg",
+                "sleep_hours": "6-7 hours",
+                "water_intake": "1.5 - 2.5 liters"
+            }
+        }
+    )
 

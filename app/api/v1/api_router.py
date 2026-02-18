@@ -7,7 +7,16 @@ from datetime import datetime, timezone
 from sqlalchemy import text
 
 from app.core.database import async_engine
-from app.api.v1.routes import auth, users, image, insights, subscription, onboarding, domain
+from app.api.v1.routes import (
+    auth,
+    users,
+    image,
+    insights,
+    subscription,
+    onboarding,
+    domain,
+    legal
+)
 
 router = APIRouter()
 
@@ -18,6 +27,7 @@ router.include_router(domain.router, prefix="/api/v1/domains", tags=["Domains"])
 router.include_router(image.router, prefix="/api/v1/images", tags=["Images"])
 router.include_router(insights.router, prefix="/api/v1/insights", tags=["Insights"])
 router.include_router(subscription.router, prefix="/api/v1/subscriptions", tags=["Subscriptions"])
+router.include_router(legal.router, prefix="/api/v1/legal", tags=["Legal"])
 
 
 async def health_check():
@@ -40,3 +50,4 @@ async def health_check():
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "database": "connected" if db_ok else "disconnected",
     }
+

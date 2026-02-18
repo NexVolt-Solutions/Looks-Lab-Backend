@@ -13,7 +13,11 @@ def _get_safe_value(data: dict, key: str, default: Any = None) -> Any:
     return data.get(key, default) if data else default
 
 
-def _get_confidence_dict(data: dict, key: str, default_label: str = "Unknown") -> dict[str, Any]:
+def _get_confidence_dict(
+    data: dict,
+    key: str,
+    default_label: str = "Unknown"
+) -> dict[str, Any]:
     if not data or key not in data:
         return {"label": default_label, "confidence": 0}
 
@@ -54,7 +58,7 @@ def normalize_health(data: dict) -> dict[str, dict[str, Any]]:
         return {
             "scalp_health": _get_confidence_dict(health, "scalp_health", "Healthy"),
             "breakage": _get_confidence_dict(health, "breakage", "None"),
-            "frizz_dandruff": _get_confidence_dict(health, "frizz_dandruff", "None"),
+            "frizz_dryness": _get_confidence_dict(health, "frizz_dryness", "None"),
             "dandruff": _get_confidence_dict(health, "dandruff", "None"),
         }
     except Exception as e:
@@ -62,7 +66,7 @@ def normalize_health(data: dict) -> dict[str, dict[str, Any]]:
         return {
             "scalp_health": {"label": "Healthy", "confidence": 0},
             "breakage": {"label": "None", "confidence": 0},
-            "frizz_dandruff": {"label": "None", "confidence": 0},
+            "frizz_dryness": {"label": "None", "confidence": 0},
             "dandruff": {"label": "None", "confidence": 0},
         }
 
@@ -97,32 +101,69 @@ def normalize_routine(data: dict) -> dict[str, list[dict[str, str]]]:
         if not isinstance(night, list):
             night = []
 
+        # Ensure each item has title and description
+        def clean_items(items: list) -> list[dict]:
+            cleaned = []
+            for item in items[:5]:
+                if isinstance(item, dict):
+                    cleaned.append({
+                        "title": item.get("title", ""),
+                        "description": item.get("description", "")
+                    })
+            return cleaned
+
         return {
-            "today": today[:5],
-            "night": night[:5],
+            "today": clean_items(today),
+            "night": clean_items(night),
         }
     except Exception as e:
         logger.error(f"Error normalizing haircare routine: {str(e)}")
-        return {
-            "today": [],
-            "night": [],
-        }
+        return {"today": [], "night": []}
 
 
-def normalize_remedies(data: dict) -> list[str]:
+def normalize_remedies(data: dict) -> dict[str, Any]:
+    """
+    Updated to return structured remedies with steps and safety tips
+    matching the Hair Home Remedies screen.
+    """
     try:
-        remedies = _get_safe_value(data, "remedies", [])
+        remedies_raw = _get_safe_value(data, "remedies", [])
+        safety_tips = _get_safe_value(data, "safety_tips", [])
 
-        if not isinstance(remedies, list):
-            return []
+        if not isinstance(remedies_raw, list):
+            return {"remedies": [], "safety_tips": []}
 
-        return [str(r) for r in remedies[:5] if r]
+        remedies = []
+        for i, r in enumerate(remedies_raw[:5]):
+            if isinstance(r, dict):
+                #  Structured format from prompt
+                remedies.append({
+                    "index": i + 1,
+                    "name": r.get("name", ""),
+                    "steps": r.get("steps", []) if isinstance(r.get("steps"), list) else []
+                })
+            elif isinstance(r, str):
+                # Fallback for plain string format
+                remedies.append({
+                    "index": i + 1,
+                    "name": r,
+                    "steps": []
+                })
+
+        return {
+            "remedies": remedies,
+            "safety_tips": [str(tip) for tip in safety_tips if tip]
+        }
     except Exception as e:
         logger.error(f"Error normalizing haircare remedies: {str(e)}")
-        return []
+        return {"remedies": [], "safety_tips": []}
 
 
 def normalize_products(data: dict) -> list[dict[str, Any]]:
+    """
+    Updated to include tags and time_of_day
+    matching the Recommended Products screen.
+    """
     try:
         products = _get_safe_value(data, "products", [])
 
@@ -136,6 +177,8 @@ def normalize_products(data: dict) -> list[dict[str, Any]]:
 
             normalized.append({
                 "name": p.get("name", "Product"),
+                "tags": p.get("tags", []) if isinstance(p.get("tags"), list) else [],
+                "time_of_day": p.get("time_of_day", "AM/PM"),
                 "overview": p.get("overview", ""),
                 "how_to_use": p.get("how_to_use", []) if isinstance(p.get("how_to_use"), list) else [],
                 "when_to_use": p.get("when_to_use", "Daily"),
@@ -151,7 +194,10 @@ def normalize_products(data: dict) -> list[dict[str, Any]]:
 
 def analyze_haircare(answers: list[dict], images: list[dict]) -> dict[str, Any] | None:
     try:
-        logger.info(f"Starting haircare analysis with {len(answers)} answers and {len(images)} images")
+        logger.info(
+            f"Starting haircare analysis with {len(answers)} answers "
+            f"and {len(images)} images"
+        )
 
         context = build_context(answers, images)
         prompt = prompt_haircare_full(context)
@@ -169,6 +215,10 @@ def analyze_haircare(answers: list[dict], images: list[dict]) -> dict[str, Any] 
             "routine": normalize_routine(raw),
             "remedies": normalize_remedies(raw),
             "products": normalize_products(raw),
+            "motivational_message": raw.get(
+                "motivational_message",
+                "Consistency is key — your scalp health will improve with daily care!"
+            )
         }
 
         logger.info("Successfully completed haircare analysis")
@@ -181,3 +231,4 @@ def analyze_haircare(answers: list[dict], images: list[dict]) -> dict[str, Any] 
         logger.error(f"Unexpected error in haircare analysis: {str(e)}", exc_info=True)
         return None
 
+    

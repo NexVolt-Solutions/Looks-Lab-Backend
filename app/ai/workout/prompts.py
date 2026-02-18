@@ -3,6 +3,20 @@ Workout domain AI prompts.
 """
 
 
+def build_context(answers: list[dict], images: list[dict]) -> dict:
+    return {
+        "answers": [
+            {
+                "step": a.get("step"),
+                "question": a.get("question"),
+                "answer": a.get("answer")
+            }
+            for a in answers
+        ],
+        "images": []
+    }
+
+
 def prompt_workout_full(context: dict) -> str:
     return f"""
 You are a certified fitness coach AI. Use the user's answers to generate a personalized workout plan.
@@ -10,57 +24,109 @@ You are a certified fitness coach AI. Use the user's answers to generate a perso
 Return STRICT JSON ONLY with this schema:
 {{
   "attributes": {{
-    "activity_level": "Sedentary|Moderate|Active",
-    "hydration": "<1L|1–2L|>2L",
-    "goal": "Fat loss|Muscle gain|Maintenance",
+    "intensity": "Low|Moderate|High",
+    "activity": "Sedentary|Moderate|Active",
+    "goal": "Fat Loss|Muscle Gain|General Fitness|Weight Maintenance",
     "diet_type": "Balanced|High-Protein|Vegetarian",
-    "focus_tags": ["Flexibility", "Build Muscle", "Fatloss", "Stamina"]
+    "today_focus": ["Flexibility", "Build Muscle", "Fatloss", "Strength"],
+    "posture_insight": "Consistency improves stamina, strength & metabolism over time. Keep pushing!",
+    "workout_summary": {{
+      "total_exercises": 6,
+      "total_duration_min": 22
+    }}
   }},
-  "routine": {{
+  "exercises": {{
     "morning": [
       {{
-        "name": "Jumping Jacks",
+        "seq": 1,
+        "title": "Jumping Jacks",
         "duration": "5 min",
-        "instructions": "Stand straight, jump and spread legs while raising arms, return to start position. Maintain steady pace."
+        "steps": [
+          "Stand straight with feet together",
+          "Jump and spread legs while raising arms",
+          "Jump back to start position",
+          "Keep a steady pace",
+          "Breathe normally and stay relaxed"
+        ]
       }},
       {{
-        "name": "Bodyweight Squats",
+        "seq": 2,
+        "title": "Bodyweight Squats",
         "duration": "5 min",
-        "instructions": "Feet shoulder-width apart, bend knees, lower hips, rise back up. Maintain proper form."
+        "steps": [
+          "Stand with feet shoulder-width apart",
+          "Keep chest up and back straight",
+          "Bend knees and lower hips as if sitting on a chair",
+          "Go as low as comfortable, then rise back up",
+          "Repeat steadily, maintaining proper form",
+          "Breathe in while lowering, out while rising"
+        ]
       }},
       {{
-        "name": "Arm Circles",
+        "seq": 3,
+        "title": "Arm Circles",
         "duration": "2 min",
-        "instructions": "Extend arms, rotate forward/backward in controlled circles. Keep shoulders relaxed."
+        "steps": [
+          "Stand straight with feet shoulder-width apart",
+          "Extend arms out to the sides at shoulder height",
+          "Rotate arms forward in small controlled circles",
+          "Gradually make the circles bigger",
+          "After 1 minute, switch direction and rotate backward",
+          "Keep shoulders relaxed and core engaged"
+        ]
       }}
     ],
     "evening": [
       {{
-        "name": "Jumping Jacks",
+        "seq": 1,
+        "title": "Jumping Jacks",
         "duration": "5 min",
-        "instructions": "Same as morning."
+        "steps": [
+          "Stand straight with feet together",
+          "Jump and spread legs while raising arms",
+          "Jump back to start position",
+          "Keep a steady pace",
+          "Breathe normally and stay relaxed"
+        ]
       }},
       {{
-        "name": "Plank",
+        "seq": 2,
+        "title": "Plank",
         "duration": "2 min",
-        "instructions": "Forearm plank, body straight, engage core. Hold position, modify if needed."
+        "steps": [
+          "Start in a forearm plank position, elbows under shoulders",
+          "Keep body in a straight line from head to heels",
+          "Engage core, glutes, and legs",
+          "Avoid letting hips sag or lift too high",
+          "Breathe steadily and hold the position",
+          "Modify by dropping knees if needed for comfort"
+        ]
       }},
       {{
-        "name": "Stretching",
+        "seq": 3,
+        "title": "Stretching",
         "duration": "5 min",
-        "instructions": "Overhead stretch, side bends, forward folds, shoulder rolls, neck tilts. Hold each for 15–30 sec."
+        "steps": [
+          "Reach arms overhead and stretch upward",
+          "Side stretches: lean gently to left and right",
+          "Forward fold: hinge at hips, reach toward toes",
+          "Shoulder rolls: forward and backward",
+          "Neck stretch: tilt head gently left, right, forward, back",
+          "Hold each stretch for 15-30 seconds, breathe deeply"
+        ]
       }}
     ]
   }},
   "progress_tracking": {{
-    "weekly_calories": "230 kcal",
+    "weekly_calories": "2300",
     "consistency": "85%",
     "strength_gain": "+12%",
+    "fitness_consistency": "85%",
     "recovery_checklist": [
-      "Get 7+ hours of sleep",
-      "Drink 8+ glasses of water",
-      "Stretch/roll for 10 minutes",
-      "Took rest if needed"
+      "Got 7+ hours of sleep",
+      "Drank 8+ glasses of water",
+      "Stretched for 10 minutes",
+      "Took a rest if needed"
     ]
   }},
   "motivational_message": "Consistency improves stamina, strength & posture over time. Keep pushing!"
