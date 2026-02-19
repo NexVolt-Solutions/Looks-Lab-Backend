@@ -9,6 +9,7 @@ from fastapi import HTTPException
 from fastapi import status as http_status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from app.utils.quotes import get_daily_quote
 
 from app.core.logging import logger
 from app.models.onboarding import OnboardingSession, OnboardingQuestion, OnboardingAnswer
@@ -262,7 +263,7 @@ class OnboardingService:
             user_id: User ID
 
         Returns:
-            Dict with height, weight, sleep_hours, water_intake
+            Dict with height, weight, sleep_hours, water_intake, and daily_quote
         """
         # Get user's sessions
         result = await self.db.execute(
@@ -275,7 +276,8 @@ class OnboardingService:
             "height": None,
             "weight": None,
             "sleep_hours": None,
-            "water_intake": None
+            "water_intake": None,
+            "daily_quote": get_daily_quote(),
         }
 
         if not session_ids:
@@ -305,7 +307,8 @@ class OnboardingService:
                     wellness[metric] = answer.answer
                     break
 
-        logger.info(f"Fetched wellness metrics for user {user_id}: {wellness}")
+        # Daily quote is already set in empty_metrics and copied
+        logger.info(f"Fetched wellness metrics for user {user_id}")
         return wellness
 
     async def calculate_progress(self, session_id: UUID) -> dict:

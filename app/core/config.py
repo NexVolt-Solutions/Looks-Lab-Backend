@@ -194,7 +194,7 @@ class Settings(BaseSettings):
         return secrets.token_urlsafe(32)
 
 
-# Initialize settings and validate on import
+
 settings = Settings()
 settings.validate_settings()
 
