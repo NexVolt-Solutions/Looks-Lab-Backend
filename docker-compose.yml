@@ -1,12 +1,18 @@
 version: "3.8"
 
+# ══════════════════════════════════════════════════════════════════
+# Looks Lab Backend - Docker Compose
+# Production-ready configuration
+# ══════════════════════════════════════════════════════════════════
+
 services:
+  # ── PostgreSQL Database ─────────────────────────────────────────
   db:
-    image: postgres:15-alpine
+    image: postgres:16-alpine
     container_name: lookslab_db
     environment:
       POSTGRES_USER: looks_lab
-      POSTGRES_PASSWORD: lab3344
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-lab3344}
       POSTGRES_DB: looks_lab
       POSTGRES_INITDB_ARGS: "-E UTF8"
     ports:
@@ -19,14 +25,20 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
-    restart: always
+    restart: unless-stopped
     networks:
       - lookslab_network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
+  # ── Redis Cache (Optional) ──────────────────────────────────────
   redis:
     image: redis:7-alpine
     container_name: lookslab_redis
-    command: redis-server --appendonly yes
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
     ports:
       - "6379:6379"
     volumes:
@@ -36,20 +48,37 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-    restart: always
+    restart: unless-stopped
     networks:
       - lookslab_network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
+  # ── FastAPI Application ─────────────────────────────────────────
   app:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        - BUILDKIT_INLINE_CACHE=1
     container_name: lookslab_app
     env_file: .env
     environment:
-      ENV: development
-      DATABASE_URI: postgresql+asyncpg://looks_lab:lab3344@db:5432/looks_lab
+      # Database
+      DATABASE_URI: postgresql+asyncpg://looks_lab:${DB_PASSWORD:-lab3344}@db:5432/looks_lab
+
+      # Redis (optional)
       REDIS_URL: redis://redis:6379/0
+
+      # Application
+      ENVIRONMENT: ${ENVIRONMENT:-production}
+      DEBUG: ${DEBUG:-false}
+
+      # CORS (update with your domains)
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000}
     ports:
       - "8000:8000"
     depends_on:
@@ -66,7 +95,7 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s
-    restart: always
+    restart: unless-stopped
     networks:
       - lookslab_network
     logging:
@@ -75,12 +104,30 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  # ── Nginx Reverse Proxy (Optional) ──────────────────────────────
+  # nginx:
+  #   image: nginx:alpine
+  #   container_name: lookslab_nginx
+  #   ports:
+  #     - "80:80"
+  #     - "443:443"
+  #   volumes:
+  #     - ./nginx.conf:/etc/nginx/nginx.conf:ro
+  #     - ./ssl:/etc/nginx/ssl:ro
+  #   depends_on:
+  #     - app
+  #   restart: unless-stopped
+  #   networks:
+  #     - lookslab_network
+
+# ── Volumes ───────────────────────────────────────────────────────
 volumes:
   db_data:
     driver: local
   redis_data:
     driver: local
 
+# ── Networks ──────────────────────────────────────────────────────
 networks:
   lookslab_network:
     driver: bridge
