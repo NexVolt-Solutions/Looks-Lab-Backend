@@ -152,6 +152,7 @@ class WellnessMetricsOut(BaseModel):
     - Your Weight: 76 kg
     - Sleep Hours: 6-7 hours
     - Water Intake: 1.5-2.5 liters
+    - Daily Quote: Motivational quote that changes daily
     """
     height: AnswerType = Field(
         default=None,
@@ -169,6 +170,9 @@ class WellnessMetricsOut(BaseModel):
         default=None,
         description="Daily water intake from daily_lifestyle step"
     )
+    daily_quote: str = Field(
+        description="Motivational quote that changes daily"
+    )
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -176,8 +180,10 @@ class WellnessMetricsOut(BaseModel):
                 "height": "5.2 ft",
                 "weight": "76 kg",
                 "sleep_hours": "6-7 hours",
-                "water_intake": "1.5 - 2.5 liters"
+                "water_intake": "1.5 - 2.5 liters",
+                "daily_quote": "Keep Pushing, Never Quit."
             }
         }
     )
+
 

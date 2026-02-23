@@ -15,23 +15,100 @@ from app.api.v1.routes import (
     subscription,
     onboarding,
     domain,
-    legal
+    workout,
+    diet,
+    legal,
 )
 
 router = APIRouter()
 
-router.include_router(auth.router, prefix="/api/v1/auth", tags=["Auth"])
-router.include_router(users.router, prefix="/api/v1/users", tags=["Users"])
-router.include_router(onboarding.router, prefix="/api/v1/onboarding", tags=["Onboarding"])
-router.include_router(domain.router, prefix="/api/v1/domains", tags=["Domains"])
-router.include_router(image.router, prefix="/api/v1/images", tags=["Images"])
-router.include_router(insights.router, prefix="/api/v1/insights", tags=["Insights"])
-router.include_router(subscription.router, prefix="/api/v1/subscriptions", tags=["Subscriptions"])
-router.include_router(legal.router, prefix="/api/v1/legal", tags=["Legal"])
+# ── Authentication ────────────────────────────────────────────────
+router.include_router(
+    auth.router,
+    prefix="/api/v1/auth",
+    tags=["Authentication"]
+)
 
+# ── Users ─────────────────────────────────────────────────────────
+router.include_router(
+    users.router,
+    prefix="/api/v1/users",
+    tags=["Users"]
+)
+
+# ── Onboarding ────────────────────────────────────────────────────
+router.include_router(
+    onboarding.router,
+    prefix="/api/v1/onboarding",
+    tags=["Onboarding"]
+)
+
+# ── Subscriptions ─────────────────────────────────────────────────
+router.include_router(
+    subscription.router,
+    prefix="/api/v1/subscriptions",
+    tags=["Subscriptions"]
+)
+
+# ── Generic Domain Routes ─────────────────────────────────────────
+
+router.include_router(
+    domain.router,
+    prefix="/api/v1/domains",
+    tags=["Domains"]
+)
+
+# ── Workout AI ────────────────────────────────────────────────────
+# AI-powered workout plan generation
+router.include_router(
+    workout.router,
+    prefix="/api/v1/domains/workout",
+    tags=["Workout"]
+)
+
+# ── Diet AI ───────────────────────────────────────────────────────
+# AI-powered meal plan generation
+router.include_router(
+    diet.router,
+    prefix="/api/v1/domains/diet",
+    tags=["Diet"]
+)
+
+# ── Images ────────────────────────────────────────────────────────
+router.include_router(
+    image.router,
+    prefix="/api/v1/images",
+    tags=["Images"]
+)
+
+# ── Insights ──────────────────────────────────────────────────────
+router.include_router(
+    insights.router,
+    prefix="/api/v1/insights",
+    tags=["Insights"]
+)
+
+# ── Legal ─────────────────────────────────────────────────────────
+router.include_router(
+    legal.router,
+    prefix="/api/v1/legal",
+    tags=["Legal"]
+)
+
+
+# ── Health Check ──────────────────────────────────────────────────
 
 async def health_check():
-    """Health check endpoint for monitoring."""
+    """
+    Health check endpoint for monitoring and load balancers.
+
+    Checks:
+    - Database connectivity
+    - API responsiveness
+
+    Returns:
+        dict: Health status with timestamp and database connection state
+    """
     db_ok = False
     try:
         async with async_engine.connect() as conn:
