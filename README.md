@@ -1,632 +1,289 @@
 # Looks Lab Backend API
 
-> **AI-Powered Personal Wellness Platform**
-> 
-> A comprehensive FastAPI-based backend system providing personalized wellness insights across multiple domains including skincare, haircare, diet, fitness, and more.
+> **AI-Powered Personal Wellness Platform**  
+> FastAPI backend providing personalized wellness insights across 8 domains: skincare, haircare, diet, fitness, fashion, height, facial, and behavioral wellness.
 
 [![Python](https://img.shields.io/badge/Python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-green.svg)](https://fastapi.tiangolo.com/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16+-blue.svg)](https://www.postgresql.org/)
-[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 ---
 
-## 📋 Table of Contents
+## 🚀 Quick Start
 
-- [Overview](#overview)
-- [Features](#features)
-- [Tech Stack](#tech-stack)
-- [Architecture](#architecture)
-- [Getting Started](#getting-started)
-  - [Prerequisites](#prerequisites)
-  - [Installation](#installation)
-  - [Environment Setup](#environment-setup)
-  - [Database Setup](#database-setup)
-- [API Documentation](#api-documentation)
-- [Project Structure](#project-structure)
-- [Development](#development)
-- [Testing](#testing)
-- [Deployment](#deployment)
-- [Contributing](#contributing)
-- [License](#license)
+```bash
+# Clone repository
+git clone https://github.com/yourusername/looks-lab-backend.git
+cd looks-lab-backend
 
----
+# Create virtual environment
+python -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
 
-## 🎯 Overview
+# Install dependencies
+pip install -r requirements.txt
 
-Looks Lab is an AI-powered wellness platform that provides personalized insights and recommendations across 8 specialized domains. The backend handles user authentication, onboarding workflows, AI-powered analysis, subscription management, and real-time insights delivery.
+# Setup database
+createdb looks_lab
+alembic upgrade head
 
-### Key Capabilities
+# Run server
+uvicorn app.main:app --reload
+```
 
-- **Anonymous Onboarding**: Users can complete onboarding before signing up
-- **Multi-Domain Support**: 8 specialized wellness domains with tailored AI processing
-- **OAuth Authentication**: Google and Apple Sign-In integration
-- **AI-Powered Analysis**: Google Gemini integration for intelligent insights
-- **Subscription Management**: Flexible subscription plans with Stripe integration
-- **Image Processing**: S3-based image storage with AI analysis
-- **Real-time Insights**: Personalized wellness recommendations
+**API Documentation:** http://localhost:8000/docs
 
 ---
 
-## ✨ Features
+## ✨ Key Features
 
-### Authentication & User Management
-- 🔐 OAuth 2.0 (Google & Apple Sign-In)
-- 🔑 JWT-based authentication with refresh tokens
-- 👤 Comprehensive user profile management
-- 🔒 Secure session handling
-
-### Onboarding System
-- 📝 Anonymous session creation (no auth required)
-- 🎯 Multi-step progressive disclosure
-- 🔗 Session linking post-authentication
-- 📊 Progress tracking across 5 onboarding stages
-
-### Domain Support
-- 💆 **Skincare**: Skin analysis and product recommendations
-- 💇 **Haircare**: Hair health insights and care routines
-- 👔 **Fashion**: Style recommendations and wardrobe planning
-- 🏋️ **Workout**: Personalized fitness plans
-- 🍎 **Diet**: Nutrition analysis and meal planning
-- 📏 **Height**: Growth tracking and optimization
-- 🧘 **Quit Porn**: Behavioral tracking and support
-- 💆 **Facial**: Facial feature analysis and care
-
-### AI & Analytics
-- 🤖 Google Gemini 3 Flash Preview integration
-- 📸 Image analysis and processing
-- 📈 Progress tracking and insights
-- 🎯 Personalized recommendations
-
-### Subscription & Payments
-- 💳 Stripe integration (ready for production)
-- 📅 Flexible subscription plans (monthly/yearly)
-- 🎁 Trial period support
-- 💰 Subscription status management
-
----
-
-## 🛠 Tech Stack
-
-### Core Framework
-- **FastAPI** - Modern, high-performance web framework
-- **Python 3.12+** - Latest Python features and optimizations
-- **Pydantic** - Data validation using Python type annotations
-- **SQLAlchemy 2.0** - Async ORM for database operations
-
-### Database
-- **PostgreSQL 16+** - Primary relational database
-- **Alembic** - Database migration management
-- **asyncpg** - Async PostgreSQL driver
-
-### Authentication & Security
-- **OAuth 2.0** - Google & Apple authentication
-- **JWT** - Secure token-based authentication
-- **Python-JOSE** - JWT token handling
-- **Passlib** - Password hashing (Bcrypt)
-
-### AI & Cloud Services
-- **Google Gemini API** - AI-powered insights and analysis
-- **AWS S3** - Image storage and management
-- **Boto3** - AWS SDK for Python
-
-### API & Networking
-- **HTTPX** - Async HTTP client
-- **Slowapi** - Rate limiting middleware
-- **Python-Multipart** - File upload handling
-
-### Development Tools
-- **Uvicorn** - ASGI server
-- **Python-dotenv** - Environment management
-- **Ruff** - Fast Python linter
-- **Black** - Code formatting
+- **Anonymous Onboarding** - Complete onboarding before authentication
+- **AI-Powered Analysis** - Google Gemini integration for personalized insights
+- **Multi-Domain Support** - 8 specialized wellness domains
+- **OAuth Authentication** - Google & Apple Sign-In
+- **Smart Recommendations** - AI-generated workout plans and meal plans
+- **Image Analysis** - Food scanning, skin analysis, facial analysis
+- **Real-time Progress** - Track wellness metrics across all domains
 
 ---
 
 ## 🏗 Architecture
+
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                       Client Layer                          │
-│         (Mobile App / Web App / Postman)                    │
-└─────────────────────────────────────────────────────────────┘
-                            ↓ HTTPS
-┌─────────────────────────────────────────────────────────────┐
-│                      FastAPI Application                     │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐     │
-│  │   Routing    │  │  Middleware  │  │   Security   │     │
-│  │   Layer      │  │   Layer      │  │   Layer      │     │
-│  └──────────────┘  └──────────────┘  └──────────────┘     │
-└─────────────────────────────────────────────────────────────┘
-                            ↓
-┌─────────────────────────────────────────────────────────────┐
-│                      Service Layer                           │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐   │
-│  │   Auth   │  │Onboarding│  │  Domain  │  │  Image   │   │
-│  │ Service  │  │ Service  │  │ Service  │  │ Service  │   │
-│  └──────────┘  └──────────┘  └──────────┘  └──────────┘   │
-└─────────────────────────────────────────────────────────────┘
-                            ↓
-┌─────────────────────────────────────────────────────────────┐
-│                    Data Access Layer                         │
-│  ┌──────────────────────────────────────────────────────┐   │
-│  │          SQLAlchemy Models & ORM                     │   │
-│  └──────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────┘
-                            ↓
-┌─────────────────────────────────────────────────────────────┐
-│                   External Services                          │
-│  ┌───────────┐  ┌───────────┐  ┌───────────┐  ┌─────────┐ │
-│  │PostgreSQL │  │   AWS S3  │  │  Gemini   │  │ OAuth   │ │
-│  │ Database  │  │  Storage  │  │    API    │  │Providers│ │
-│  └───────────┘  └───────────┘  └───────────┘  └─────────┘ │
-└─────────────────────────────────────────────────────────────┘
+Client (Mobile/Web)
+    ↓ HTTPS
+FastAPI Application
+    ↓
+Service Layer (Business Logic)
+    ↓
+Data Layer (SQLAlchemy ORM)
+    ↓
+PostgreSQL | AWS S3 | Google Gemini API
 ```
 
 ---
 
-## 🚀 Getting Started
+## 📋 Tech Stack
 
-### Prerequisites
+**Core:** FastAPI, Python 3.12, Pydantic, SQLAlchemy 2.0  
+**Database:** PostgreSQL 16, Alembic, asyncpg  
+**Auth:** OAuth 2.0, JWT, Google/Apple Sign-In  
+**AI:** Google Gemini 3 Flash Preview  
+**Storage:** AWS S3, Boto3  
+**Tools:** Uvicorn, HTTPX, Slowapi (rate limiting)
 
-Before you begin, ensure you have the following installed:
+---
 
-- **Python 3.12+** - [Download Python](https://www.python.org/downloads/)
-- **PostgreSQL 16+** - [Download PostgreSQL](https://www.postgresql.org/download/)
-- **Git** - [Download Git](https://git-scm.com/downloads/)
+## ⚙️ Environment Setup
 
-### Installation
+Create `.env` file:
 
-1. **Clone the repository**
-```bash
-   git clone https://github.com/yourusername/looks-lab-backend.git
-   cd looks-lab-backend
-```
-
-2. **Create virtual environment**
-```bash
-   python -m venv venv
-   
-   # Windows
-   venv\Scripts\activate
-   
-   # macOS/Linux
-   source venv/bin/activate
-```
-
-3. **Install dependencies**
-```bash
-   pip install -r requirements.txt
-```
-
-### Environment Setup
-
-1. **Create `.env` file in the project root**
-```bash
-   cp .env.example .env
-```
-
-2. **Configure environment variables**
 ```env
-   # Database
-   DATABASE_URI=postgresql+asyncpg://looks_lab:your_password@localhost:5432/looks_lab
-   
-   # Security
-   JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
-   JWT_REFRESH_SECRET=your-super-secret-refresh-key-change-this-in-production
-   JWT_ALGORITHM=HS256
-   ACCESS_TOKEN_EXPIRE_MINUTES=30
-   REFRESH_TOKEN_EXPIRE_DAYS=30
-   
-   # OAuth
-   GOOGLE_CLIENT_ID=your-google-client-id
-   APPLE_CLIENT_ID=your-apple-client-id
-   
-   # AI Services
-   GEMINI_API_KEY=your-gemini-api-key
-   GEMINI_MODEL=gemini-3-flash-preview
-   
-   # AWS S3 (Optional)
-   AWS_ACCESS_KEY_ID=your-aws-access-key
-   AWS_SECRET_ACCESS_KEY=your-aws-secret-key
-   AWS_REGION=us-east-1
-   S3_BUCKET_NAME=looks-lab-images
-   
-   # Application
-   ENVIRONMENT=development
-   DEBUG=true
-   ALLOWED_ORIGINS=http://localhost:3000,http://localhost:8000
+# Database
+DATABASE_URI=postgresql+asyncpg://looks_lab:password@localhost:5432/looks_lab
+
+# Security
+JWT_SECRET=your-secret-key-here
+JWT_REFRESH_SECRET=your-refresh-secret-here
+
+# OAuth
+GOOGLE_CLIENT_ID=your-google-client-id
+APPLE_CLIENT_ID=your-apple-client-id
+
+# AI
+GEMINI_API_KEY=your-gemini-api-key
+
+# AWS S3 (Optional)
+AWS_ACCESS_KEY_ID=your-aws-access-key
+AWS_SECRET_ACCESS_KEY=your-aws-secret-key
+S3_BUCKET_NAME=looks-lab-images
+
+# App
+ENVIRONMENT=development
+DEBUG=true
 ```
-
-### Database Setup
-
-1. **Create PostgreSQL database**
-```bash
-   # Connect to PostgreSQL
-   psql -U postgres
-   
-   # Create database and user
-   CREATE DATABASE looks_lab;
-   CREATE USER looks_lab WITH PASSWORD 'your_password';
-   GRANT ALL PRIVILEGES ON DATABASE looks_lab TO looks_lab;
-```
-
-2. **Run database migrations**
-```bash
-   # Generate migration (if needed)
-   alembic revision --autogenerate -m "Initial migration"
-   
-   # Apply migrations
-   alembic upgrade head
-```
-
-3. **Verify migration**
-```bash
-   # Check current database version
-   alembic current
-   
-   # View migration history
-   alembic history
-```
-
-4. **Start the development server**
-```bash
-   uvicorn app.main:app --reload
-```
-
-5. **Access the application**
-   - API: http://localhost:8000
-   - Interactive Docs: http://localhost:8000/docs
-   - Alternative Docs: http://localhost:8000/redoc
 
 ---
 
-## 📚 API Documentation
+## 📚 API Endpoints
 
-### Interactive Documentation
-
-Once the server is running, access the auto-generated API documentation:
-
-- **Swagger UI**: http://localhost:8000/docs
-- **ReDoc**: http://localhost:8000/redoc
-
-### Postman Collection
-
-Import the provided Postman collection for easy API testing:
-
-1. **Files to import**:
-   - `Looks_Lab_API.postman_collection.json`
-   - `Looks_Lab_Environment.postman_environment.json`
-
-2. **Anonymous Onboarding Flow** (No Authentication):
+### Authentication
 ```
-   1. POST   /api/v1/onboarding/sessions
-   2. GET    /api/v1/onboarding/sessions/{id}/flow
-   3. POST   /api/v1/onboarding/sessions/{id}/answers
-   4. PATCH  /api/v1/onboarding/sessions/{id}/domain
-   5. PATCH  /api/v1/onboarding/sessions/{id}/payment
+POST /api/v1/auth/google          # Google Sign-In
+POST /api/v1/auth/apple           # Apple Sign-In
+POST /api/v1/auth/refresh         # Refresh token
+POST /api/v1/auth/sign-out        # Sign out
 ```
 
-3. **Authentication** (After Onboarding):
+### Onboarding (Anonymous)
 ```
-   6. POST   /api/v1/auth/google
-   7. PATCH  /api/v1/onboarding/sessions/{id}/link
-```
-
-### Key Endpoints
-
-#### Authentication
-```
-POST   /api/v1/auth/google              # Google Sign-In
-POST   /api/v1/auth/apple               # Apple Sign-In
-POST   /api/v1/auth/refresh             # Refresh access token
-POST   /api/v1/auth/sign-out            # Sign out
+POST  /api/v1/onboarding/sessions              # Create session
+GET   /api/v1/onboarding/sessions/{id}/flow    # Get current question
+POST  /api/v1/onboarding/sessions/{id}/answers # Submit answer
+PATCH /api/v1/onboarding/sessions/{id}/domain  # Select domain
+PATCH /api/v1/onboarding/sessions/{id}/link    # Link to user (auth required)
 ```
 
-#### Onboarding (Anonymous)
+### AI Features
 ```
-POST   /api/v1/onboarding/sessions                    # Create session
-GET    /api/v1/onboarding/sessions/{id}/flow          # Get flow state
-POST   /api/v1/onboarding/sessions/{id}/answers       # Submit answer
-PATCH  /api/v1/onboarding/sessions/{id}/domain        # Select domain
-PATCH  /api/v1/onboarding/sessions/{id}/payment       # Confirm payment
-```
-
-#### Onboarding (Authenticated)
-```
-PATCH  /api/v1/onboarding/sessions/{id}/link          # Link session to user
-GET    /api/v1/onboarding/users/me/answers            # Get user answers
-GET    /api/v1/onboarding/users/me/wellness           # Get wellness metrics
+POST /api/v1/domains/workout/generate-plan     # Generate workout plan
+POST /api/v1/domains/diet/generate-meal-plan   # Generate meal plan
+POST /api/v1/domains/diet/foods/analyze        # Analyze food image
+GET  /api/v1/domains/diet/foods/barcode/{code} # Scan barcode
 ```
 
-#### Domains
+### Domains
 ```
-GET    /api/v1/domains/{domain}/questions             # Get domain questions
-POST   /api/v1/domains/{domain}/answers               # Submit domain answer
-GET    /api/v1/domains/{domain}/progress              # Get domain progress
-GET    /api/v1/domains/progress/overview              # Get all domains progress
+GET  /api/v1/domains/{domain}/questions        # Get questions
+POST /api/v1/domains/{domain}/answers          # Submit answers
+GET  /api/v1/domains/{domain}/progress         # Get progress
+GET  /api/v1/domains/progress/overview         # All domains progress
 ```
 
-#### Images
-```
-POST   /api/v1/images/                                # Upload image
-GET    /api/v1/images/                                # List user images
-GET    /api/v1/images/{id}                            # Get image details
-GET    /api/v1/images/{id}/url                        # Get presigned URL
-DELETE /api/v1/images/{id}                            # Delete image
-```
+**Valid domains:** `skincare`, `haircare`, `workout`, `diet`, `fashion`, `height`, `facial`, `quit_porn`
 
 ---
 
 ## 📁 Project Structure
+
 ```
 looks-lab-backend/
-│
-├── alembic/                    # Database migrations
-│   ├── versions/              # Migration scripts
-│   └── env.py                 # Alembic configuration
-│
 ├── app/
-│   ├── api/                   # API layer
-│   │   └── v1/
-│   │       ├── routes/        # API endpoints
-│   │       │   ├── auth.py
-│   │       │   ├── onboarding.py
-│   │       │   ├── domains.py
-│   │       │   ├── images.py
-│   │       │   ├── users.py
-│   │       │   └── ...
-│   │       └── api_router.py  # Main router
-│   │
-│   ├── core/                  # Core functionality
-│   │   ├── config.py          # Settings & configuration
-│   │   ├── database.py        # Database connection
-│   │   ├── logging.py         # Logging setup
-│   │   ├── rate_limit.py      # Rate limiting
-│   │   └── security.py        # Security middleware
-│   │
-│   ├── models/                # SQLAlchemy models
-│   │   ├── user.py
-│   │   ├── onboarding.py
-│   │   ├── domain.py
-│   │   ├── image.py
+│   ├── api/v1/routes/        # API endpoints
+│   │   ├── auth.py           # Authentication
+│   │   ├── onboarding.py     # Onboarding flow
+│   │   ├── domains.py        # Generic domain routes
+│   │   ├── workout.py        # Workout AI
+│   │   ├── diet.py           # Diet AI
 │   │   └── ...
-│   │
-│   ├── schemas/               # Pydantic schemas
-│   │   ├── auth.py
-│   │   ├── onboarding.py
-│   │   ├── domain.py
-│   │   └── ...
-│   │
-│   ├── services/              # Business logic
-│   │   ├── auth_service.py
-│   │   ├── onboarding_service.py
-│   │   ├── domain_service.py
-│   │   └── ...
-│   │
-│   ├── utils/                 # Utility functions
-│   │   ├── jwt_utils.py
-│   │   ├── google_utils.py
-│   │   ├── apple_utils.py
-│   │   └── ...
-│   │
-│   └── main.py                # FastAPI application
-│
-├── .env                       # Environment variables
-├── .env.example               # Environment template
-├── .gitignore                 # Git ignore rules
-├── alembic.ini                # Alembic configuration
-├── requirements.txt           # Python dependencies
-├── README.md                  # This file
-└── Looks_Lab_API.postman_collection.json  # Postman collection
+│   ├── core/                 # Core config, database, logging
+│   ├── models/               # SQLAlchemy models
+│   ├── schemas/              # Pydantic schemas
+│   ├── services/             # Business logic
+│   ├── utils/                # Helper functions
+│   └── main.py               # FastAPI app
+├── alembic/                  # Database migrations
+├── .env                      # Environment variables
+├── requirements.txt          # Dependencies
+└── README.md
 ```
 
 ---
 
-## 💻 Development
+## 🔧 Development
 
-### Running in Development Mode
+### Database Migrations
 ```bash
-# Start server with auto-reload
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-
-# Start with specific log level
-uvicorn app.main:app --reload --log-level debug
-```
-
-### Code Quality
-```bash
-# Format code with Black
-black app/
-
-# Lint with Ruff
-ruff check app/
-
-# Type checking (if using mypy)
-mypy app/
-```
-
-### Database Management
-```bash
-# Create new migration
+# Create migration
 alembic revision --autogenerate -m "description"
 
 # Apply migrations
 alembic upgrade head
 
-# Rollback migration
+# Rollback
 alembic downgrade -1
-
-# View migration history
-alembic history
-
-# Check current version
-alembic current
 ```
 
-### Environment Variables
-
-| Variable | Description | Required | Default |
-|----------|-------------|----------|---------|
-| `DATABASE_URI` | PostgreSQL connection string | ✅ Yes | - |
-| `JWT_SECRET` | JWT signing secret | ✅ Yes | - |
-| `JWT_REFRESH_SECRET` | Refresh token secret | ✅ Yes | - |
-| `GOOGLE_CLIENT_ID` | Google OAuth client ID | ✅ Yes | - |
-| `APPLE_CLIENT_ID` | Apple OAuth client ID | ✅ Yes | - |
-| `GEMINI_API_KEY` | Google Gemini API key | ✅ Yes | - |
-| `GEMINI_MODEL` | Gemini model name | ❌ No | `gemini-3-flash-preview` |
-| `AWS_ACCESS_KEY_ID` | AWS access key | ❌ No | - |
-| `AWS_SECRET_ACCESS_KEY` | AWS secret key | ❌ No | - |
-| `S3_BUCKET_NAME` | S3 bucket name | ❌ No | - |
-| `ENVIRONMENT` | Environment mode | ❌ No | `development` |
-| `DEBUG` | Debug mode | ❌ No | `true` |
-
----
-
-## 🧪 Testing
-
-### Manual Testing with Postman
-
-1. Import the Postman collection
-2. Set environment to "Looks Lab - Local"
-3. Run requests in order (numbered 1-7)
-
-### Testing Anonymous Onboarding Flow
+### Code Quality
 ```bash
-# 1. Create anonymous session (no auth)
-curl -X POST http://localhost:8000/api/v1/onboarding/sessions
+# Format code
+black app/
 
-# 2. Get flow state
-curl -X GET "http://localhost:8000/api/v1/onboarding/sessions/{session_id}/flow?step=profile_setup&index=0"
-
-# 3. Submit answer
-curl -X POST http://localhost:8000/api/v1/onboarding/sessions/{session_id}/answers \
-  -H "Content-Type: application/json" \
-  -d '{"question_id": 1, "answer": 25, "question_type": "numeric"}'
-
-# 4. Select domain
-curl -X PATCH "http://localhost:8000/api/v1/onboarding/sessions/{session_id}/domain?domain=skincare"
-
-# 5. Confirm payment
-curl -X PATCH http://localhost:8000/api/v1/onboarding/sessions/{session_id}/payment
-
-# 6. Sign in (get tokens)
-curl -X POST http://localhost:8000/api/v1/auth/google \
-  -H "Content-Type: application/json" \
-  -d '{"id_token": "mock-token", "email": "test@gmail.com", "name": "Test User"}'
-
-# 7. Link session to user
-curl -X PATCH http://localhost:8000/api/v1/onboarding/sessions/{session_id}/link \
-  -H "Authorization: Bearer {access_token}"
+# Lint
+ruff check app/
 ```
+
+### Testing
+Import Postman collection: `Looks_Lab_API.postman_collection.json`
 
 ---
 
-## 🚢 Deployment
+## 📱 Mobile Integration
 
-### Production Setup
+### Anonymous Onboarding Flow
+1. Create session (no auth)
+2. Answer questions
+3. Select domain
+4. Confirm payment
+5. Sign in with Google/Apple
+6. Link session to user account
 
-1. **Update environment variables**
-```env
+### In-App Purchases
+- **iOS:** Apple In-App Purchases
+- **Android:** Google Play Billing
+- **Recommended:** Use RevenueCat for cross-platform management
+
+---
+
+## 🚢 Production Deployment
+
+1. **Set production environment**
+   ```env
    ENVIRONMENT=production
    DEBUG=false
-   DATABASE_URI=postgresql+asyncpg://user:pass@prod-db:5432/looks_lab
-```
+   ```
 
-2. **Set secure secrets**
-```bash
-   # Generate secure secrets
+2. **Generate secure secrets**
+   ```bash
    python -c "import secrets; print(secrets.token_urlsafe(32))"
-```
+   ```
 
 3. **Configure CORS**
-```env
-   ALLOWED_ORIGINS=https://your-frontend.com,https://api.your-domain.com
-```
+   ```env
+   ALLOWED_ORIGINS=https://your-app.com
+   ```
 
-### Docker Deployment (Coming Soon)
-```dockerfile
-# Dockerfile example
-FROM python:3.12-slim
+4. **Health check**
+   ```bash
+   curl https://api.your-domain.com/health
+   ```
 
-WORKDIR /app
+---
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+## 📊 API Features Roadmap
 
-COPY . .
+- [x] Anonymous onboarding
+- [x] OAuth authentication (Google & Apple)
+- [x] AI workout plan generation
+- [x] AI meal plan generation
+- [x] Food image analysis
+- [x] Multi-domain support
+- [ ] In-app purchase validation
+- [ ] Push notifications
+- [ ] Advanced analytics
+- [ ] Multi-language support
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
-```
+---
 
-### Health Checks
-```bash
-# Health check endpoint
-curl http://localhost:8000/health
-```
+## 📖 Documentation
+
+- **Swagger UI:** http://localhost:8000/docs
+- **ReDoc:** http://localhost:8000/redoc
+- **Postman Collection:** Available in repository
 
 ---
 
 ## 🤝 Contributing
 
-We welcome contributions! Please follow these steps:
-
 1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-### Coding Standards
-
-- Follow PEP 8 style guide
-- Write descriptive commit messages
-- Add docstrings to all functions
-- Update tests for new features
-- Update documentation as needed
+2. Create feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit changes (`git commit -m 'Add amazing feature'`)
+4. Push to branch (`git push origin feature/amazing-feature`)
+5. Open Pull Request
 
 ---
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT License - see [LICENSE](LICENSE) file
 
 ---
 
-## 👥 Authors
+## 📧 Contact
 
-- **Your Name** - *Initial work* - [YourGitHub](https://github.com/yourusername)
-
----
-
-## 🙏 Acknowledgments
-
-- FastAPI for the amazing framework
-- Google Gemini for AI capabilities
-- PostgreSQL community
-- All contributors and supporters
+**Support:** support@nexvoltsolutions.com  
+**Website:** https://lookslabai.com
 
 ---
 
-## 📞 Support
-
-For support, email nexvoltsolutions.com or join our Slack channel.
-
----
-
-## 🗺 Roadmap
-
-- [x] Anonymous onboarding flow
-- [x] OAuth authentication (Google & Apple)
-- [x] Multi-domain support
-- [x] AI-powered insights
-- [ ] Stripe payment integration
-- [ ] Real-time notifications
-- [ ] Mobile app API optimization
-- [ ] Advanced analytics dashboard
-- [ ] Multi-language support
-- [ ] Docker containerization
-
----
-
-<p align="center">Made with ❤️ by the Looks Lab Team</p>
-
+<p align="center">Built with ❤️ by Looks Lab Team</p>
