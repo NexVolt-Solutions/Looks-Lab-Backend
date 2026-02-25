@@ -18,6 +18,7 @@ from app.api.v1.routes import (
     workout,
     diet,
     legal,
+    iap,  # ← ADDED: In-App Purchase routes
 )
 
 router = APIRouter()
@@ -95,6 +96,13 @@ router.include_router(
     tags=["Legal"]
 )
 
+# ── In-App Purchase ───────────────────────────────────────────────
+router.include_router(
+    iap.router,
+    prefix="/api/v1/iap",
+    tags=["In-App Purchases"]
+)
+
 
 # ── Health Check ──────────────────────────────────────────────────
 
@@ -127,4 +135,5 @@ async def health_check():
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "database": "connected" if db_ok else "disconnected",
     }
-
+    
+    

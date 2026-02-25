@@ -43,16 +43,13 @@ app = FastAPI(
     title="Looks Lab API",
     version="1.0.0",
     description="Backend API for Looks Lab — AI-powered personal transformation",
-    contact={
-        "name": "Looks Lab Team",
-        "email": "support@looks-lab.com"
-    },
+    contact={"name": "Looks Lab Team", "email": "support@looks-lab.com"},
     lifespan=lifespan,
-
-    docs_url="/docs" if not settings.is_production else None,
-    redoc_url="/redoc" if not settings.is_production else None,
-    openapi_url="/openapi.json" if not settings.is_production else None,
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json",
 )
+
 
 
 # ── Middleware ────────────────────────────────────────────────────

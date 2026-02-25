@@ -245,5 +245,4 @@ async def check_subscription_status(
     """
     subscription_service = SubscriptionService(db)
 
-    # Use the service method for cleaner implementation
     return await subscription_service.get_subscription_status(current_user.id)

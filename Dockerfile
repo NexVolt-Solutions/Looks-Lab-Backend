@@ -1,6 +1,6 @@
 # ══════════════════════════════════════════════════════════════════
 # Looks Lab Backend - Production Dockerfile
-# Multi-stage build for optimized image size
+# Multi-stage build for optimized image size and performance
 # ══════════════════════════════════════════════════════════════════
 
 # ── Stage 1: Builder ──────────────────────────────────────────────
@@ -17,8 +17,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy and install Python dependencies
+# Copy requirements first (for better layer caching)
 COPY requirements.txt .
+
+# Install Python dependencies
 RUN pip install --upgrade pip && \
     pip install --prefix=/install --no-cache-dir -r requirements.txt
 
@@ -55,11 +57,11 @@ USER appuser
 # Expose port
 EXPOSE 8000
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
+# Health check (updated)
+HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=3 \
+    CMD curl -f -H "Host: localhost" http://localhost:8000/health || exit 1
 
 # Start application
-# Wait for DB → Run migrations → Start server
-CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4"]
+# Run migrations → Start server with optimal workers and proxy support
+CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2 --timeout-keep-alive 65 --forwarded-allow-ips='*'"]
 

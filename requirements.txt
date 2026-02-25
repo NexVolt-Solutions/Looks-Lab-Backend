@@ -1,15 +1,20 @@
-# Core backend
+# ══════════════════════════════════════════════════════════════
+# Looks Lab Backend - Production Requirements
+# Python 3.12+
+# ══════════════════════════════════════════════════════════════
+
+# ── Core Backend Framework ────────────────────────────────────
 fastapi==0.115.0
 uvicorn[standard]==0.32.0
 gunicorn==23.0.0
 
-# Database + ORM
+# ── Database + ORM ────────────────────────────────────────────
 sqlalchemy==2.0.36
 alembic==1.13.2
 psycopg2-binary==2.9.9
 asyncpg==0.29.0
 
-# Environment & Config
+# ── Environment & Configuration ───────────────────────────────
 python-dotenv==1.0.1
 pydantic==2.12.5
 pydantic-settings==2.6.1
@@ -17,31 +22,35 @@ email-validator==2.1.0.post1
 typing-extensions>=4.14.1
 python-multipart==0.0.19
 
-# Security / Auth
-python-jose==3.4.0
+# ── Security & Authentication ─────────────────────────────────
+python-jose[cryptography]==3.4.0
+passlib[bcrypt]==1.7.4
 google-auth==2.35.0
 requests==2.32.4
 slowapi==0.1.9
 
-# Testing
+# ── Testing ───────────────────────────────────────────────────
 pytest==8.3.3
 pytest-asyncio==0.23.6
 coverage==7.6.1
 
-# AI / Image Processing
+# ── AI & Image Processing ─────────────────────────────────────
 opencv-python-headless==4.10.0.84
 mediapipe==0.10.14
-
-# Gemini SDK
 google-generativeai==0.8.3
+pillow==10.4.0
 
-# AWS SDK for S3 storage
+# ── AWS SDK ───────────────────────────────────────────────────
 boto3==1.35.76
 botocore==1.35.76
 
-# Logging
+# ── Logging ───────────────────────────────────────────────────
 loguru==0.7.2
 
-# HTTP Client — barcode lookup (Open Food Facts API)
+# ── HTTP Client ───────────────────────────────────────────────
 httpx==0.27.2
+
+# ── Utilities ─────────────────────────────────────────────────
+python-dateutil==2.9.0
+pytz==2024.2
 

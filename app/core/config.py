@@ -75,6 +75,10 @@ class Settings(BaseSettings):
     APPLE_KEY_ID: str | None = None
     APPLE_PRIVATE_KEY: str | None = None
 
+    # ── In-App Purchase ───────────────────────────────────────
+    APPLE_SHARED_SECRET: str | None = None
+    GOOGLE_SERVICE_ACCOUNT_JSON: str | None = None
+
     # ── Rate Limiting ─────────────────────────────────────────
     RATE_LIMIT_PER_MINUTE: int = 60
 
@@ -180,6 +184,12 @@ class Settings(BaseSettings):
             # Sentry validation (if enabled)
             if self.ENABLE_SENTRY and not self.SENTRY_DSN:
                 errors.append("SENTRY_DSN is required when ENABLE_SENTRY is True")
+
+            # In-App Purchase validation (production only)
+            if not self.APPLE_SHARED_SECRET:
+                errors.append(
+                    "APPLE_SHARED_SECRET is required in production for iOS subscriptions"
+                )
 
         if errors:
             error_msg = (
