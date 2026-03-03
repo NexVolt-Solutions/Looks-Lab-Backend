@@ -3,7 +3,6 @@ Authentication schemas.
 Pydantic models for auth requests and responses.
 """
 from datetime import datetime
-
 from pydantic import BaseModel, EmailStr
 
 from app.schemas.user import UserOut
@@ -12,7 +11,7 @@ from app.schemas.user import UserOut
 # ── Request Schemas ───────────────────────────────────────────────
 
 class OAuthBase(BaseModel):
-    """ Added: shared base for OAuth providers"""
+    """Shared base for OAuth providers"""
     id_token: str
     email: EmailStr | None = None
     name: str | None = None
@@ -36,11 +35,14 @@ class TokenResponse(BaseModel):
     Standard OAuth token response.
     Returned after successful sign-in or token refresh.
     """
+    # Use UserOut (Pydantic schema) instead of raw SQLAlchemy User
     user: UserOut
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
     expires_in: int | None = None
+
+    model_config = {"from_attributes": True}  
 
 
 class SignOutResponse(BaseModel):

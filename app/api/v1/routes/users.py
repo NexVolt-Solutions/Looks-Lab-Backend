@@ -26,7 +26,13 @@ async def get_my_user(
 ):
     """Get current user's profile information."""
     user_service = UserService(db)
-    return await user_service.get_user_by_id(current_user.id)
+    user = await user_service.get_user_by_id(current_user.id)
+
+    
+    await db.refresh(user, attribute_names=["subscription"])
+
+    
+    return UserOut.model_validate(user)
 
 
 @router.patch("/me", response_model=UserOut)
@@ -37,7 +43,12 @@ async def update_my_user(
 ):
     """Update current user's profile information."""
     user_service = UserService(db)
-    return await user_service.update_user(current_user.id, payload)
+    user = await user_service.update_user(current_user.id, payload)
+
+   
+    await db.refresh(user, attribute_names=["subscription"])
+
+    return UserOut.model_validate(user)
 
 
 @router.delete("/me")

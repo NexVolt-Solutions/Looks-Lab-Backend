@@ -1,7 +1,3 @@
-"""
-Authentication service layer.
-Handles OAuth authentication, token management, and user creation.
-"""
 from datetime import datetime, timezone
 
 from fastapi import HTTPException, status
@@ -14,6 +10,7 @@ from app.enums import AuthProviderEnum
 from app.models.refresh_token import RefreshToken
 from app.models.user import User
 from app.schemas.auth import TokenResponse
+from app.schemas.user import UserOut  
 from app.utils.jwt_utils import (
     create_access_token,
     create_refresh_token,
@@ -38,9 +35,7 @@ class AuthService:
     ) -> User:
         email = email.lower().strip()
 
-        result = await self.db.execute(
-            select(User).where(User.email == email)
-        )
+        result = await self.db.execute(select(User).where(User.email == email))
         user = result.scalar_one_or_none()
 
         # Provider mismatch check
@@ -79,20 +74,24 @@ class AuthService:
             is_verified=True,
             is_active=True,
             profile_image=payload.get("picture"),
-
-            # ── Google fields ──────────────────────────────────
             google_sub=payload.get("google_sub"),
             google_picture=payload.get("google_picture"),
             last_google_id_token=payload.get("last_google_id_token"),
-
-            # ── Apple fields ───────────────────────────────────
             apple_sub=payload.get("apple_sub"),
             last_apple_id_token=payload.get("last_apple_id_token"),
         )
 
-        self.db.add(user)
-        await self.db.commit()
-        await self.db.refresh(user)
+        try:
+            self.db.add(user)
+            await self.db.commit()
+            await self.db.refresh(user)
+        except Exception as e:
+            await self.db.rollback()
+            logger.error(f"Failed to create user {email}: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to create account"
+            )
 
         return user
 
@@ -102,43 +101,40 @@ class AuthService:
         provider: AuthProviderEnum,
         payload: dict
     ) -> User:
-        # Update name only if not set
         if payload.get("name") and not user.name:
             user.name = payload.get("name")
 
-        # Always update profile picture
         if payload.get("picture"):
             user.profile_image = payload.get("picture")
 
-        # Set provider if missing
         if not user.provider:
             user.provider = provider
 
-        # ── Google specific updates ────────────────────────────
         if provider == AuthProviderEnum.GOOGLE:
             user.google_sub = payload.get("google_sub")
             user.google_picture = payload.get("google_picture")
             user.last_google_id_token = payload.get("last_google_id_token")
 
-        # ── Apple specific updates ─────────────────────────────
-        #  Added: was completely missing
         if provider == AuthProviderEnum.APPLE:
             user.apple_sub = payload.get("apple_sub")
             user.last_apple_id_token = payload.get("last_apple_id_token")
 
         ensure_user_active(user)
 
-        await self.db.commit()
-        await self.db.refresh(user)
+        try:
+            await self.db.commit()
+            await self.db.refresh(user)
+        except Exception as e:
+            await self.db.rollback()
+            logger.error(f"Failed to update user {user.email}: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to update account"
+            )
 
         return user
 
     async def update_last_login(self, user_id: int) -> None:
-        """
-         Added: Update user's last_login timestamp.
-        Called after every successful authentication.
-        Non-critical — errors are logged but not raised.
-        """
         try:
             user = await self.db.get(User, user_id)
             if user:
@@ -146,8 +142,7 @@ class AuthService:
                 await self.db.commit()
         except Exception as e:
             logger.error(f"Failed to update last_login for user {user_id}: {e}")
-            # Don't raise — last_login update is non-critical
-
+            
     # ── Token Management ──────────────────────────────────────────
 
     async def issue_tokens(
@@ -157,42 +152,53 @@ class AuthService:
     ) -> TokenResponse:
         access_token = create_access_token({
             "user_id": str(user.id),
-            "email": user.email
+            "email": user.email,
+            "provider": user.provider,
         })
 
         refresh_value = create_refresh_token()
         expires_at = get_refresh_expiry()
 
-        # Check for existing token
         result = await self.db.execute(
             select(RefreshToken).where(RefreshToken.user_id == user.id)
         )
         existing_token = result.scalar_one_or_none()
 
-        if existing_token:
-            existing_token.token = refresh_value
-            existing_token.expires_at = expires_at
-            existing_token.is_revoked = False
-            existing_token.device_info = device_info
-            logger.info(f"Rotated refresh token for user {user.id}")
-        else:
-            new_token = RefreshToken(
-                user_id=user.id,
-                token=refresh_value,
-                expires_at=expires_at,
-                is_revoked=False,
-                device_info=device_info,
+        try:
+            if existing_token:
+                existing_token.token = refresh_value
+                existing_token.expires_at = expires_at
+                existing_token.is_revoked = False
+                existing_token.device_info = device_info
+                logger.info(f"Rotated refresh token for user {user.id}")
+            else:
+                new_token = RefreshToken(
+                    user_id=user.id,
+                    token=refresh_value,
+                    expires_at=expires_at,
+                    is_revoked=False,
+                    device_info=device_info,
+                )
+                self.db.add(new_token)
+                logger.info(f"Created refresh token for user {user.id}")
+
+            await self.db.commit()
+        except Exception as e:
+            await self.db.rollback()
+            logger.error(f"Failed to issue tokens for user {user.id}: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to issue tokens"
             )
-            self.db.add(new_token)
-            logger.info(f"Created refresh token for user {user.id}")
-
-        await self.db.commit()
-
 
         expires_in = settings.JWT_EXPIRATION_MINUTES * 60
 
+        
+        await self.db.refresh(user, attribute_names=["updated_at", "subscription"])
+
+        
         return TokenResponse(
-            user=user,
+            user=UserOut.model_validate(user),
             access_token=access_token,
             refresh_token=refresh_value,
             token_type="bearer",
@@ -207,48 +213,24 @@ class AuthService:
 
         if not token_record:
             logger.warning("Invalid refresh token attempted")
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid refresh token"
-            )
-
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
 
         if token_record.is_revoked:
-            logger.warning(
-                f"Revoked refresh token used for user {token_record.user_id}"
-            )
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Refresh token has been revoked"
-            )
+            logger.warning(f"Revoked refresh token used for user {token_record.user_id}")
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token has been revoked")
 
-        # Check expiry
         if token_record.expires_at < get_current_time():
-            logger.warning(
-                f"Expired refresh token for user {token_record.user_id}"
-            )
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Refresh token expired"
-            )
+            logger.warning(f"Expired refresh token for user {token_record.user_id}")
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token expired")
 
-        # Get user
-        result = await self.db.execute(
-            select(User).where(User.id == token_record.user_id)
-        )
+        result = await self.db.execute(select(User).where(User.id == token_record.user_id))
         user = result.scalar_one_or_none()
 
         if not user:
-            logger.error(
-                f"User {token_record.user_id} not found for valid refresh token"
-            )
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="User not found"
-            )
+            logger.error(f"User {token_record.user_id} not found for valid refresh token")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
         ensure_user_active(user)
-
         logger.info(f"Validated refresh token for user {user.id}")
         return user
 
@@ -260,14 +242,15 @@ class AuthService:
 
         if not token_record:
             logger.warning("Attempted to revoke non-existent refresh token")
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Invalid or missing refresh token"
-            )
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invalid or missing refresh token")
 
-        #  Fixed: mark as revoked instead of deleting — keeps audit trail
         token_record.is_revoked = True
-        await self.db.commit()
+        try:
+            await self.db.commit()
+        except Exception as e:
+            await self.db.rollback()
+            logger.error(f"Failed to revoke refresh token for user {token_record.user_id}: {e}")
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to revoke token")
 
         logger.info(f"Revoked refresh token for user {token_record.user_id}")
 

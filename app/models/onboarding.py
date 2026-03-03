@@ -6,8 +6,7 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     String, DateTime, ForeignKey, JSON,
-    UniqueConstraint, func, Integer, Boolean,
-    Index, text
+    func, Boolean, text
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship, Mapped, mapped_column
@@ -18,47 +17,54 @@ if TYPE_CHECKING:
     from app.models.user import User
 
 
+# ============================================================
+# ONBOARDING SESSION 
+# ============================================================
+
 class OnboardingSession(Base):
+    
     __tablename__ = "onboarding_sessions"
 
-    # ── Primary Key ───────────────────────────────────────────
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         primary_key=True,
         default=uuid.uuid4
     )
 
-    # ── Foreign Key ───────────────────────────────────────────
     user_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=True,
-        index=True
+        index=True,
+        comment="NULL = anonymous, set when user signs in"
     )
 
-    # ── Domain Selection ──────────────────────────────────────
     selected_domain: Mapped[str | None] = mapped_column(
         String(50),
         nullable=True,
-        index=True
+        index=True,
+        comment="Domain selected by user (skincare, haircare, etc.)"
     )
 
-    # ── Payment State ─────────────────────────────────────────
     is_paid: Mapped[bool] = mapped_column(
         Boolean,
         server_default=text("false"),
-        nullable=False
-    )
-    payment_confirmed_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True),
-        nullable=True
+        nullable=False,
+        comment="Has user confirmed payment?"
     )
 
-    # ── Timestamps ────────────────────────────────────────────
+    is_completed: Mapped[bool] = mapped_column(
+        Boolean,
+        server_default=text("false"),
+        nullable=False,
+        comment="Has onboarding been completed?"
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
         nullable=False
     )
+
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -66,119 +72,125 @@ class OnboardingSession(Base):
         nullable=False
     )
 
-    # ── Relationships ─────────────────────────────────────────
+    # Relationships
     user: Mapped[User | None] = relationship(
         "User",
         back_populates="onboarding_sessions"
     )
-    answers: Mapped[list[OnboardingAnswer]] = relationship(
+
+    answers: Mapped[list["OnboardingAnswer"]] = relationship(
         "OnboardingAnswer",
         back_populates="session",
         cascade="all, delete-orphan"
     )
 
 
-class OnboardingQuestion(Base):
-    __tablename__ = "onboarding_questions"
-    __table_args__ = (
-        UniqueConstraint("step", "question", name="uq_onboarding_step_question"),
-        UniqueConstraint("step", "seq", name="uq_onboarding_step_seq"),
-        Index("ix_step_seq", "step", "seq"),
-    )
+# ============================================================
+# ONBOARDING QUESTIONS 
+# ============================================================
 
-    # ── Primary Key ───────────────────────────────────────────
+class OnboardingQuestion(Base):
+    """
+    Onboarding questions seeded from JSON file.
+    Frontend handles ordering and grouping.
+    """
+    __tablename__ = "onboarding_questions"
+
     id: Mapped[int] = mapped_column(
         primary_key=True,
-        index=True
+        autoincrement=True
     )
 
-    # ── Question Data ─────────────────────────────────────────
     step: Mapped[str] = mapped_column(
         String(50),
         nullable=False,
-        index=True
-    )
-    question: Mapped[str] = mapped_column(
-        String(255),
-        nullable=False
-    )
-    type: Mapped[str] = mapped_column(
-        String(50),
-        nullable=False
-    )
-    options: Mapped[list[str] | None] = mapped_column(
-        JSON,
-        nullable=True
-    )
-    constraints: Mapped[dict | None] = mapped_column(
-        JSON,
-        nullable=True
-    )
-    seq: Mapped[int | None] = mapped_column(
-        Integer,
-        nullable=True,
-        index=True
+        index=True,
+        comment="Step category (profile_setup, haircare, etc.)"
     )
 
-    # ── Timestamps ────────────────────────────────────────────
+    question: Mapped[str] = mapped_column(
+        String(500),
+        nullable=False,
+        comment="The question text"
+    )
+
+    type: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        comment="Question type: text, number, choice, multi_choice"
+    )
+
+    options: Mapped[list[str] | None] = mapped_column(
+        JSON,
+        nullable=True,
+        comment="Available options for choice/multi_choice questions"
+    )
+
+    constraints: Mapped[dict | None] = mapped_column(
+        JSON,
+        nullable=True,
+        comment="Validation constraints (e.g., min/max for numbers)"
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
         nullable=False
     )
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        onupdate=func.now(),
-        nullable=False
-    )
 
-    # ── Relationships ─────────────────────────────────────────
-    answers: Mapped[list[OnboardingAnswer]] = relationship(
+    # Relationships
+    answers: Mapped[list["OnboardingAnswer"]] = relationship(
         "OnboardingAnswer",
         back_populates="question",
         cascade="all, delete-orphan"
     )
 
 
-class OnboardingAnswer(Base):
-    __tablename__ = "onboarding_answers"
-    __table_args__ = (
-        Index("ix_session_question", "session_id", "question_id"),
-    )
+# ============================================================
+# ONBOARDING ANSWERS (linked to sessions)
+# ============================================================
 
-    # ── Primary Key ───────────────────────────────────────────
+class OnboardingAnswer(Base):
+    """
+    User's answers to onboarding questions.
+    
+    Linked to SESSION (not user) because:
+    - Anonymous users answer before signing in
+    - Session gets linked to user after sign-in
+    """
+    __tablename__ = "onboarding_answers"
+
     id: Mapped[int] = mapped_column(
         primary_key=True,
-        index=True
+        autoincrement=True
     )
 
-    # ── Foreign Keys ──────────────────────────────────────────
     session_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("onboarding_sessions.id", ondelete="CASCADE"),
-        nullable=False
+        nullable=False,
+        index=True,
+        comment="Which session this answer belongs to"
     )
+
     question_id: Mapped[int] = mapped_column(
         ForeignKey("onboarding_questions.id", ondelete="CASCADE"),
-        nullable=False
+        nullable=False,
+        index=True,
+        comment="Which question was answered"
     )
 
-    # ── Answer Data ───────────────────────────────────────────
-    answer: Mapped[dict | list | str | int | None] = mapped_column(
+    answer: Mapped[dict | list | str | int | float | None] = mapped_column(
         JSON,
-        nullable=True
+        nullable=True,
+        comment="The user's answer (can be string, number, list for multi_choice)"
     )
 
-    # ── Timestamps ────────────────────────────────────────────
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
         nullable=False
     )
-    completed_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True),
-        nullable=True
-    )
+
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -186,13 +198,15 @@ class OnboardingAnswer(Base):
         nullable=False
     )
 
-    # ── Relationships ─────────────────────────────────────────
-    question: Mapped[OnboardingQuestion] = relationship(
-        "OnboardingQuestion",
-        back_populates="answers"
-    )
-    session: Mapped[OnboardingSession] = relationship(
+    # Relationships
+    session: Mapped["OnboardingSession"] = relationship(
         "OnboardingSession",
         back_populates="answers"
     )
 
+    question: Mapped["OnboardingQuestion"] = relationship(
+        "OnboardingQuestion",
+        back_populates="answers"
+    )
+    
+    

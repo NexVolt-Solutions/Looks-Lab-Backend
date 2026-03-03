@@ -13,6 +13,8 @@ from app.schemas.subscription import SubscriptionOut
 class UserCreate(BaseModel):
     email: str
     name: str | None = None
+    age: int | None = None
+    gender: str | None = None
     notifications_enabled: bool = True
 
 
@@ -25,19 +27,26 @@ class UserUpdate(BaseModel):
 
 
 class UserOut(UserBase):
+    """
+    Safe user output schema.
+    Includes subscription only if it is eagerly loaded
+    in the service layer before serialization.
+    """
     name: str | None = None
     age: int | None = None
     gender: str | None = None
     profile_image: str | None = None
     notifications_enabled: bool
     created_at: datetime
-    updated_at: datetime | None = None
-    subscription: SubscriptionOut | None = None
+    updated_at: Optional[datetime] = None
+
+    
+    subscription: Optional[SubscriptionOut] = None
 
     model_config = {"from_attributes": True}
 
 
-# ==================== NEW: WEEKLY PROGRESS SCHEMAS ====================
+# ==================== WEEKLY PROGRESS SCHEMAS ====================
 
 class DailyScore(BaseModel):
     """Single day's progress score for the weekly chart."""
@@ -101,4 +110,5 @@ class WeeklyProgressOut(BaseModel):
             }
         }
     }
+
 

@@ -14,6 +14,9 @@ from app.models.user import User
 from app.schemas.iap import (
     IAPReceiptRequest,
     IAPReceiptResponse,
+    IAPProductsResponse,
+    IAPProduct,
+    RestorePurchasesResponse,
 )
 from app.services.iap_service import IAPService
 
@@ -71,11 +74,11 @@ async def validate_receipt(
     return result
 
 
-@router.post("/restore-purchases")
+@router.post("/restore-purchases", response_model=RestorePurchasesResponse)
 async def restore_purchases(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_db),
-):
+) -> RestorePurchasesResponse:
     """
     Restore previous purchases for a user.
     
@@ -92,11 +95,25 @@ async def restore_purchases(
     service = IAPService(db)
     purchases = await service.restore_purchases(current_user.id)
     
-    return {
-        "success": True,
-        "purchases": purchases,
-        "message": f"Found {len(purchases)} active subscription(s)"
-    }
+    # Check if user has active subscription after restore
+    has_active = len(purchases) > 0
+    plan = None
+    expires_at = None
+    
+    if has_active and purchases:
+        # Get latest subscription
+        latest = purchases[0]
+        plan = latest.get("plan")
+        expires_at = latest.get("expires_at")
+    
+    return RestorePurchasesResponse(
+        success=True,
+        subscriptions_restored=len(purchases),
+        active_subscription=has_active,
+        plan=plan,
+        expires_at=expires_at,
+        message=f"Successfully restored {len(purchases)} subscription(s)" if has_active else "No active subscriptions found"
+    )
 
 
 @router.post("/webhooks/apple")
@@ -186,7 +203,7 @@ async def google_webhook(
         import base64
         if "data" in message:
             decoded = base64.b64decode(message["data"]).decode("utf-8")
-            notification = eval(decoded)  # TODO: Use json.loads instead
+            notification = eval(decoded)  
             
             logger.info(f"?? Google webhook received: {notification.get('notificationType')}")
             
@@ -205,59 +222,59 @@ async def google_webhook(
         return {"status": "error", "message": str(e)}
 
 
-@router.get("/products")
-async def get_iap_products():
+@router.get("/products", response_model=IAPProductsResponse)
+async def get_iap_products() -> IAPProductsResponse:
     """
     Get available in-app purchase products.
     
     Returns product IDs that the mobile app should query from the store.
     This is useful for displaying available subscription plans.
     """
-    return {
-        "products": [
-            {
-                "id": "com.lookslab.weekly",
-                "type": "subscription",
-                "platform": "ios",
-                "name": "Weekly Subscription",
-                "description": "Looks Lab Premium - Weekly",
-            },
-            {
-                "id": "com.lookslab.monthly",
-                "type": "subscription",
-                "platform": "ios",
-                "name": "Monthly Subscription",
-                "description": "Looks Lab Premium - Monthly",
-            },
-            {
-                "id": "com.lookslab.yearly",
-                "type": "subscription",
-                "platform": "ios",
-                "name": "Yearly Subscription",
-                "description": "Looks Lab Premium - Yearly (Save 17%)",
-            },
-            {
-                "id": "looks_lab_weekly",
-                "type": "subscription",
-                "platform": "android",
-                "name": "Weekly Subscription",
-                "description": "Looks Lab Premium - Weekly",
-            },
-            {
-                "id": "looks_lab_monthly",
-                "type": "subscription",
-                "platform": "android",
-                "name": "Monthly Subscription",
-                "description": "Looks Lab Premium - Monthly",
-            },
-            {
-                "id": "looks_lab_yearly",
-                "type": "subscription",
-                "platform": "android",
-                "name": "Yearly Subscription",
-                "description": "Looks Lab Premium - Yearly (Save 17%)",
-            },
+    return IAPProductsResponse(
+        products=[
+            IAPProduct(
+                id="com.lookslab.weekly",
+                type="subscription",
+                platform="ios",
+                name="Weekly Subscription",
+                description="Looks Lab Premium - Weekly",
+            ),
+            IAPProduct(
+                id="com.lookslab.monthly",
+                type="subscription",
+                platform="ios",
+                name="Monthly Subscription",
+                description="Looks Lab Premium - Monthly",
+            ),
+            IAPProduct(
+                id="com.lookslab.yearly",
+                type="subscription",
+                platform="ios",
+                name="Yearly Subscription",
+                description="Looks Lab Premium - Yearly (Save 17%)",
+            ),
+            IAPProduct(
+                id="looks_lab_weekly",
+                type="subscription",
+                platform="android",
+                name="Weekly Subscription",
+                description="Looks Lab Premium - Weekly",
+            ),
+            IAPProduct(
+                id="looks_lab_monthly",
+                type="subscription",
+                platform="android",
+                name="Monthly Subscription",
+                description="Looks Lab Premium - Monthly",
+            ),
+            IAPProduct(
+                id="looks_lab_yearly",
+                type="subscription",
+                platform="android",
+                name="Yearly Subscription",
+                description="Looks Lab Premium - Yearly (Save 17%)",
+            ),
         ]
-    }
+    )
     
     

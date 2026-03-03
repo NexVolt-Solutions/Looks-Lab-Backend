@@ -2,9 +2,11 @@
 Authentication routes.
 Handles OAuth sign-in, token refresh, and sign-out.
 """
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
+from google.oauth2 import id_token
+from google.auth.transport import requests as google_requests
 
 from app.core.config import settings
 from app.core.database import get_async_db
@@ -19,9 +21,10 @@ from app.schemas.auth import (
 )
 from app.services.auth_service import AuthService
 from app.utils.apple_utils import verify_apple_token
-from app.utils.google_utils import verify_google_token
 
 router = APIRouter()
+
+GOOGLE_ISSUERS = {"accounts.google.com", "https://accounts.google.com"}
 
 
 # ── Request Bodies ────────────────────────────────────────────────
@@ -39,62 +42,55 @@ class SignOutRequest(BaseModel):
 @router.post("/google", response_model=TokenResponse)
 @limiter.limit(RateLimits.AUTH)
 async def google_sign_in(
-    request: Request,  # noqa: ARG001 — required by slowapi rate limiter
+    request: Request,
     payload: GoogleAuthSchema,
     db: AsyncSession = Depends(get_async_db)
 ):
     try:
-        token_info = verify_google_token(payload.id_token)
+        idinfo = id_token.verify_oauth2_token(
+            payload.id_token,
+            google_requests.Request(),
+            settings.GOOGLE_CLIENT_ID,
+        )
 
-        email = (token_info.get("email") or "").lower().strip()
+        iss = idinfo.get("iss", "")
+        if not any(iss.startswith(valid) for valid in GOOGLE_ISSUERS):
+            logger.warning(f"Invalid Google token issuer: {iss}")
+            raise HTTPException(status_code=400, detail="Invalid token issuer")
+
+        email = (idinfo.get("email") or "").lower().strip()
         if not email:
             logger.warning("Google token missing email")
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Google token missing email"
-            )
+            raise HTTPException(status_code=400, detail="Google token missing email")
 
         auth_service = AuthService(db)
-
         user = await auth_service.get_or_create_user(
             email=email,
             provider=AuthProviderEnum.GOOGLE,
             payload={
                 "name": payload.name,
-                "picture": token_info.get("picture") or payload.picture,
-                "google_sub": token_info.get("sub"),
-                "google_picture": token_info.get("picture"),
+                "picture": idinfo.get("picture") or payload.picture,
+                "google_sub": idinfo.get("sub"),
+                "google_picture": idinfo.get("picture"),
                 "last_google_id_token": payload.id_token,
             }
         )
 
         await auth_service.update_last_login(user.id)
-
         return await auth_service.issue_tokens(user)
 
-    except HTTPException:
-        raise
     except ValueError as e:
         logger.error(f"Google token verification failed: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid Google token"
-        )
+        raise HTTPException(status_code=400, detail=f"Invalid Google token: {e}")
     except Exception as e:
-        logger.error(
-            f"Google sign-in failed: {e}",
-            exc_info=settings.is_development
-        )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Authentication failed"
-        )
+        logger.error(f"Google sign-in failed: {e}", exc_info=settings.is_development)
+        raise HTTPException(status_code=500, detail="Authentication failed")
 
 
 @router.post("/apple", response_model=TokenResponse)
 @limiter.limit(RateLimits.AUTH)
 async def apple_sign_in(
-    request: Request,  # noqa: ARG001 — required by slowapi rate limiter
+    request: Request,
     payload: AppleAuthSchema,
     db: AsyncSession = Depends(get_async_db)
 ):
@@ -104,13 +100,9 @@ async def apple_sign_in(
         email = (token_info.get("email") or "").lower().strip()
         if not email:
             logger.warning("Apple token missing email")
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Apple token missing email"
-            )
+            raise HTTPException(status_code=400, detail="Apple token missing email")
 
         auth_service = AuthService(db)
-
         user = await auth_service.get_or_create_user(
             email=email,
             provider=AuthProviderEnum.APPLE,
@@ -123,32 +115,20 @@ async def apple_sign_in(
         )
 
         await auth_service.update_last_login(user.id)
-
         return await auth_service.issue_tokens(user)
 
-    except HTTPException:
-        raise
     except ValueError as e:
         logger.error(f"Apple token verification failed: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid Apple token"
-        )
+        raise HTTPException(status_code=400, detail=f"Invalid Apple token: {e}")
     except Exception as e:
-        logger.error(
-            f"Apple sign-in failed: {e}",
-            exc_info=settings.is_development
-        )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Authentication failed"
-        )
+        logger.error(f"Apple sign-in failed: {e}", exc_info=settings.is_development)
+        raise HTTPException(status_code=500, detail="Authentication failed")
 
 
 @router.post("/refresh", response_model=TokenResponse)
 @limiter.limit(RateLimits.AUTH)
 async def refresh_access_token(
-    request: Request,  # noqa: ARG001 — required by slowapi rate limiter
+    request: Request,
     body: RefreshTokenRequest,
     db: AsyncSession = Depends(get_async_db)
 ):
@@ -156,24 +136,17 @@ async def refresh_access_token(
         auth_service = AuthService(db)
         user = await auth_service.validate_refresh_token(body.refresh_token)
         return await auth_service.issue_tokens(user)
-
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(
-            f"Token refresh failed: {e}",
-            exc_info=settings.is_development
-        )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Token refresh failed"
-        )
+        logger.error(f"Token refresh failed: {e}", exc_info=settings.is_development)
+        raise HTTPException(status_code=500, detail="Token refresh failed")
 
 
 @router.post("/sign-out", response_model=SignOutResponse)
 @limiter.limit(RateLimits.AUTH)
 async def sign_out(
-    request: Request,  # noqa: ARG001 — required by slowapi rate limiter
+    request: Request,
     body: SignOutRequest,
     db: AsyncSession = Depends(get_async_db)
 ):
@@ -181,16 +154,10 @@ async def sign_out(
         auth_service = AuthService(db)
         await auth_service.revoke_refresh_token(body.refresh_token)
         return SignOutResponse(detail="Successfully signed out")
-
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(
-            f"Sign out failed: {e}",
-            exc_info=settings.is_development
-        )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Sign out failed"
-        )
+        logger.error(f"Sign out failed: {e}", exc_info=settings.is_development)
+        raise HTTPException(status_code=500, detail="Sign out failed")
+
 

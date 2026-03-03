@@ -1,101 +1,96 @@
+"""
+Seed onboarding questions into database.
+Run once to populate the onboarding_questions table.
+"""
+import asyncio
 import json
 from pathlib import Path
-from sqlalchemy.orm import Session
+from sqlalchemy import select
 
+from app.core.database import AsyncSessionLocal
 from app.models.onboarding import OnboardingQuestion
-from app.models.domain import DomainQuestion
-from app.core.database import SyncSessionLocal
+from app.core.logging import logger
 
 
-ONBOARDING_STEPS = {
-    "profile_setup",
-    "daily_lifestyle",
-    "goals_focus",
-    "motivation",
-    "experience_planning",
-}
-
-
-def seed_questions():
+async def seed_questions():
+    """Load questions from JSON file and insert into database."""
+    
     # Project root directory
     BASE_DIR = Path(__file__).resolve().parent.parent
-
-    # Correct absolute path to JSON file
-    json_path = BASE_DIR / "app" / "static" / "questions.json"
-
+    
+    # Path to questions JSON
+    json_path = BASE_DIR / "app" / "data" / "onboarding_questions.json"
+    
     if not json_path.exists():
-        raise FileNotFoundError(f"questions.json not found at {json_path}")
-
+        logger.error(f"Questions file not found: {json_path}")
+        print(f"? Questions file not found at: {json_path}")
+        return
+    
     with open(json_path, "r", encoding="utf-8") as f:
         data = json.load(f)
-
-    db: Session = SyncSessionLocal()
-
-    try:
-        # Clear existing questions (dev safe)
-        db.query(OnboardingQuestion).delete()
-        db.query(DomainQuestion).delete()
-        db.commit()
-
-        print("Old questions removed.")
-
-        inserted = 0
-        skipped = 0
-
-        # Seed Onboarding Questions
-        for step in ONBOARDING_STEPS:
-            questions = data.get(step, [])
-
-            for idx, q in enumerate(questions, start=1):
-                if not q.get("question") or not q.get("type"):
-                    skipped += 1
-                    continue
-
-                db.add(
-                    OnboardingQuestion(
-                        step=step,
-                        question=q["question"],
-                        type=q["type"],
-                        options=q.get("options"),
-                        constraints=q.get("constraints"),
-                        seq=idx,
-                    )
-                )
-                inserted += 1
-
-        # Seed Domain Questions
-        for domain, questions in data.items():
-            if domain in ONBOARDING_STEPS:
-                continue
-
-            for idx, q in enumerate(questions, start=1):
-                if not q.get("question") or not q.get("type"):
-                    skipped += 1
-                    continue
-
-                db.add(
-                    DomainQuestion(
-                        domain=domain,
-                        question=q["question"],
-                        type=q["type"],
-                        options=q.get("options"),
-                        constraints=q.get("constraints"),
-                        seq=idx,
-                    )
-                )
-                inserted += 1
-
-        db.commit()
-        print(f"Seeding complete. Inserted: {inserted}, Skipped: {skipped}")
-
-    except Exception as e:
-        db.rollback()
-        print(f"Seeding failed: {e}")
-        raise
-
-    finally:
-        db.close()
+    
+    # Get questions from new flat structure
+    questions_data = data.get("questions", [])
+    
+    if not questions_data:
+        logger.error("No questions found in JSON file")
+        print("? No questions found in JSON file")
+        return
+    
+    print(f"?? Found {len(questions_data)} questions to seed")
+    
+    async with AsyncSessionLocal() as session:
+        # Check if questions already exist
+        result = await session.execute(select(OnboardingQuestion))
+        existing = result.scalars().all()
+        
+        if existing:
+            print(f"??  Database already has {len(existing)} questions")
+            user_input = input("Delete and re-seed? (yes/no): ")
+            
+            if user_input.lower() != "yes":
+                print("? Seeding cancelled")
+                return
+            
+            # Delete existing questions
+            for question in existing:
+                await session.delete(question)
+            await session.commit()
+            print("???  Deleted existing questions")
+        
+        # Insert new questions
+        created_count = 0
+        
+        for q_data in questions_data:
+            question = OnboardingQuestion(
+                step=q_data["step"],
+                question=q_data["question"],
+                type=q_data["type"],
+                options=q_data.get("options"),
+                constraints=q_data.get("constraints")
+            )
+            session.add(question)
+            created_count += 1
+        
+        await session.commit()
+        print(f"? Successfully seeded {created_count} questions!")
+        
+        # Verify
+        result = await session.execute(select(OnboardingQuestion))
+        all_questions = result.scalars().all()
+        print(f"? Total questions in database: {len(all_questions)}")
+        
+        # Show breakdown by step
+        steps = {}
+        for q in all_questions:
+            steps[q.step] = steps.get(q.step, 0) + 1
+        
+        print("\n?? Questions by step:")
+        for step, count in sorted(steps.items()):
+            print(f"  - {step}: {count} questions")
 
 
 if __name__ == "__main__":
-    seed_questions()
+    asyncio.run(seed_questions())
+    
+    

@@ -4,7 +4,7 @@ Handles user profile operations (CRUD) and progress tracking.
 """
 from datetime import datetime, timezone, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_
+from sqlalchemy import select, func
 from fastapi import HTTPException, status
 
 from app.models.user import User
@@ -29,11 +29,17 @@ class UserService:
                 detail="User not found"
             )
 
+        
+        await self.db.refresh(user, attribute_names=["subscription"])
         return user
 
     async def get_user_by_email(self, email: str) -> User | None:
         result = await self.db.execute(select(User).where(User.email == email.lower()))
-        return result.scalar_one_or_none()
+        user = result.scalar_one_or_none()
+        if user:
+           
+            await self.db.refresh(user, attribute_names=["subscription"])
+        return user
 
     async def update_user(self, user_id: int, payload: UserUpdate) -> User:
         user = await self.get_user_by_id(user_id)
@@ -63,7 +69,7 @@ class UserService:
         if changes:
             user.updated_at = datetime.now(timezone.utc)
             await self.db.commit()
-            await self.db.refresh(user)
+            await self.db.refresh(user, attribute_names=["subscription"])
             logger.info(f"Updated user {user_id}: {', '.join(changes)}")
         else:
             logger.debug(f"No changes for user {user_id}")
@@ -107,28 +113,18 @@ class UserService:
           were submitted that day
         - Calculate score as percentage of total
           domain questions answered up to that day
-
-        Args:
-            user_id: User ID
-
-        Returns:
-            Weekly progress data for chart display
         """
-        # Get current week's Mon-Sun dates
         today = datetime.now(timezone.utc).date()
-        # Get Monday of current week
         monday = today - timedelta(days=today.weekday())
         week_dates = [monday + timedelta(days=i) for i in range(7)]
         day_labels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
-        # Get total domain questions available (for score calculation)
         from app.models.domain import DomainQuestion
         total_result = await self.db.execute(
             select(func.count(DomainQuestion.id))
         )
-        total_questions = total_result.scalar() or 1  # Avoid division by zero
+        total_questions = total_result.scalar() or 1
 
-        # Get all user's domain answers with their completion dates
         result = await self.db.execute(
             select(DomainAnswer)
             .where(DomainAnswer.user_id == user_id)
@@ -136,13 +132,10 @@ class UserService:
         )
         all_answers = result.scalars().all()
 
-        # Build daily scores
         days = []
         scores = []
 
-        for i, (date, label) in enumerate(zip(week_dates, day_labels)):
-            # Count answers completed up to end of this day
-            # This gives cumulative progress
+        for date, label in zip(week_dates, day_labels):
             end_of_day = datetime.combine(
                 date + timedelta(days=1),
                 datetime.min.time()
@@ -153,11 +146,7 @@ class UserService:
                 if a.completed_at and a.completed_at < end_of_day
             ]
 
-            # Calculate score as percentage of total questions
-            score = round(
-                (len(answers_up_to_day) / total_questions) * 100, 1
-            )
-            # Cap at 100
+            score = round((len(answers_up_to_day) / total_questions) * 100, 1)
             score = min(score, 100.0)
 
             days.append({
@@ -167,7 +156,6 @@ class UserService:
             })
             scores.append(score)
 
-        # Calculate week average
         week_average = round(sum(scores) / len(scores), 1) if scores else 0.0
 
         logger.info(f"Calculated weekly progress for user {user_id}")
@@ -179,4 +167,5 @@ class UserService:
             "days": days,
             "week_average": week_average
         }
+
 

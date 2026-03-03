@@ -35,9 +35,78 @@ class IAPReceiptResponse(BaseModel):
     """Receipt validation response."""
     success: bool = Field(..., description="Whether validation succeeded")
     subscription_active: bool = Field(..., description="Whether subscription is active")
-    plan: str | None = Field(None, description="Subscription plan (monthly/yearly)")
+    plan: str | None = Field(None, description="Subscription plan (weekly/monthly/yearly)")
     expires_at: datetime | None = Field(None, description="Subscription expiration date")
     message: str | None = Field(None, description="Error message if validation failed")
+
+
+class IAPProduct(BaseModel):
+    """Single IAP product/subscription plan."""
+    id: str = Field(..., description="Product ID (e.g., com.lookslab.weekly)")
+    type: str = Field(..., description="Product type (e.g., subscription)")
+    platform: str = Field(..., description="Platform (ios or android)")
+    name: str = Field(..., description="Display name")
+    description: str = Field(..., description="Product description")
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "id": "com.lookslab.weekly",
+                "type": "subscription",
+                "platform": "ios",
+                "name": "Weekly Subscription",
+                "description": "Looks Lab Premium - Weekly"
+            }
+        }
+
+
+class IAPProductsResponse(BaseModel):
+    """Response for GET /products endpoint."""
+    products: list[IAPProduct] = Field(..., description="Available subscription products")
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "products": [
+                    {
+                        "id": "com.lookslab.weekly",
+                        "type": "subscription",
+                        "platform": "ios",
+                        "name": "Weekly Subscription",
+                        "description": "Looks Lab Premium - Weekly"
+                    },
+                    {
+                        "id": "com.lookslab.monthly",
+                        "type": "subscription",
+                        "platform": "ios",
+                        "name": "Monthly Subscription",
+                        "description": "Looks Lab Premium - Monthly"
+                    }
+                ]
+            }
+        }
+
+
+class RestorePurchasesResponse(BaseModel):
+    """Response for POST /restore-purchases endpoint."""
+    success: bool = Field(..., description="Whether restore was successful")
+    subscriptions_restored: int = Field(..., description="Number of subscriptions restored")
+    active_subscription: bool = Field(..., description="Whether user has active subscription")
+    plan: str | None = Field(None, description="Active plan (weekly/monthly/yearly)")
+    expires_at: datetime | None = Field(None, description="Subscription expiration date")
+    message: str = Field(..., description="Status message")
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "success": True,
+                "subscriptions_restored": 1,
+                "active_subscription": True,
+                "plan": "monthly",
+                "expires_at": "2026-03-25T12:00:00Z",
+                "message": "Successfully restored 1 subscription"
+            }
+        }
 
 
 class AppleReceiptData(BaseModel):
@@ -99,4 +168,6 @@ class StoreWebhook(BaseModel):
     transaction_id: str | None = None
     expiration_date: datetime | None = None
     cancellation_date: datetime | None = None
-    raw_data: dict 
+    raw_data: dict  # Original webhook payload
+    
+    
