@@ -1,48 +1,22 @@
-"""
-Subscription service layer.
-Handles subscription operations (create, cancel, check status, reactivate).
-"""
 from datetime import datetime, timezone
 from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_
+from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 from fastapi import HTTPException, status
 
 from app.models.subscription import Subscription, SubscriptionStatus
-from app.models.user import User
-from app.schemas.subscription import (
-    SubscriptionCreate,
-    SubscriptionUpdate,
-    PlanType
-)
-from app.utils.subscription_utils import (  # ✅ Import from utils
-    calculate_end_date,
-    get_plan_price
-)
+from app.schemas.subscription import SubscriptionCreate, PlanType
+from app.utils.subscription_utils import calculate_end_date
 from app.core.logging import logger
 
 
 class SubscriptionService:
-    """Service class for subscription-related operations."""
 
     def __init__(self, db: AsyncSession):
         self.db = db
 
     async def create_subscription(self, payload: SubscriptionCreate) -> Subscription:
-        """
-        Create a new subscription for a user.
-
-        Args:
-            payload: Subscription creation data
-
-        Returns:
-            Created subscription object
-
-        Raises:
-            HTTPException: If user already has an active subscription
-        """
-        # ✅ Check for existing active subscription
         existing = await self._get_active_subscription(payload.user_id)
         if existing:
             raise HTTPException(
@@ -50,53 +24,29 @@ class SubscriptionService:
                 detail=f"User already has an active {existing.plan} subscription"
             )
 
-        # ✅ Calculate start and end dates using utility
         start_date = datetime.now(timezone.utc)
         end_date = calculate_end_date(start_date, payload.plan)
-
-        # ✅ Determine initial status
-        initial_status = payload.status if payload.status else SubscriptionStatus.active
 
         subscription = Subscription(
             user_id=payload.user_id,
             plan=payload.plan,
-            status=initial_status,
+            status=SubscriptionStatus.active,
             start_date=start_date,
-            end_date=end_date,  # ✅ Now includes end_date
-            payment_id=payload.payment_id,  # ✅ Uses payment_id from payload
+            end_date=end_date,
+            payment_id=payload.payment_id,
         )
 
         self.db.add(subscription)
         await self.db.commit()
         await self.db.refresh(subscription)
 
-        logger.info(
-            f"Created {payload.plan} subscription (ID: {subscription.id}) "
-            f"for user {payload.user_id} with status {initial_status}"
-        )
+        logger.info(f"Created {payload.plan} subscription (ID: {subscription.id}) for user {payload.user_id}")
         return subscription
 
-    async def get_user_subscription(
-            self,
-            user_id: int,
-            raise_if_not_found: bool = True  # ✅ Added parameter
-    ) -> Optional[Subscription]:
-        """
-        Get the most recent subscription for a user.
-
-        Args:
-            user_id: User ID
-            raise_if_not_found: Whether to raise exception if not found
-
-        Returns:
-            Subscription object or None
-
-        Raises:
-            HTTPException: If subscription not found and raise_if_not_found=True
-        """
+    async def get_user_subscription(self, user_id: int, raise_if_not_found: bool = True) -> Optional[Subscription]:
         result = await self.db.execute(
             select(Subscription)
-            .options(selectinload(Subscription.user))  # ✅ Eager load user
+            .options(selectinload(Subscription.user))
             .where(Subscription.user_id == user_id)
             .order_by(Subscription.created_at.desc())
         )
@@ -108,25 +58,12 @@ class SubscriptionService:
                 detail="No subscription found for this user"
             )
 
-        # ✅ Auto-expire if needed
         if subscription:
             await self._auto_expire_if_needed(subscription)
 
         return subscription
 
     async def get_subscription_by_id(self, subscription_id: int) -> Subscription:
-        """
-        Get a subscription by its ID.
-
-        Args:
-            subscription_id: Subscription ID
-
-        Returns:
-            Subscription object
-
-        Raises:
-            HTTPException: If subscription not found
-        """
         result = await self.db.execute(
             select(Subscription)
             .options(selectinload(Subscription.user))
@@ -143,37 +80,15 @@ class SubscriptionService:
         await self._auto_expire_if_needed(subscription)
         return subscription
 
-    async def cancel_subscription(
-            self,
-            subscription_id: int,
-            user_id: int,
-            reason: Optional[str] = None
-    ) -> Subscription:
-        """
-        Cancel a subscription.
-
-        Args:
-            subscription_id: Subscription ID to cancel
-            user_id: User ID (for authorization)
-            reason: Optional cancellation reason
-
-        Returns:
-            Updated subscription object
-
-        Raises:
-            HTTPException: If subscription not found, not authorized,
-                          or already cancelled/expired
-        """
+    async def cancel_subscription(self, subscription_id: int, user_id: int) -> Subscription:
         subscription = await self.get_subscription_by_id(subscription_id)
 
-        # Authorization check
         if subscription.user_id != user_id:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You don't have permission to cancel this subscription"
             )
 
-        # ✅ Status validation
         if subscription.status == SubscriptionStatus.cancelled:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -192,31 +107,10 @@ class SubscriptionService:
         await self.db.commit()
         await self.db.refresh(subscription)
 
-        logger.info(
-            f"Cancelled subscription {subscription_id} for user {user_id}"
-            + (f" - Reason: {reason}" if reason else "")
-        )
+        logger.info(f"Cancelled subscription {subscription_id} for user {user_id}")
         return subscription
 
-    async def reactivate_subscription(
-            self,
-            subscription_id: int,
-            user_id: int
-    ) -> Subscription:
-        """
-        Reactivate a cancelled subscription (if not expired).
-
-        Args:
-            subscription_id: Subscription ID to reactivate
-            user_id: User ID (for authorization)
-
-        Returns:
-            Updated subscription object
-
-        Raises:
-            HTTPException: If subscription not found, not authorized,
-                          not cancelled, or already expired
-        """
+    async def reactivate_subscription(self, subscription_id: int, user_id: int) -> Subscription:
         subscription = await self.get_subscription_by_id(subscription_id)
 
         if subscription.user_id != user_id:
@@ -247,15 +141,6 @@ class SubscriptionService:
         return subscription
 
     async def get_subscription_status(self, user_id: int) -> dict:
-        """
-        Get detailed subscription status for a user.
-
-        Args:
-            user_id: User ID
-
-        Returns:
-            Dictionary with subscription status details
-        """
         subscription = await self.get_user_subscription(user_id, raise_if_not_found=False)
 
         if not subscription:
@@ -280,15 +165,6 @@ class SubscriptionService:
         }
 
     async def check_active_subscription(self, user_id: int) -> bool:
-        """
-        Check if user has an active subscription.
-
-        Args:
-            user_id: User ID
-
-        Returns:
-            True if user has active subscription, False otherwise
-        """
         subscription = await self._get_active_subscription(user_id)
 
         if not subscription:
@@ -299,4 +175,36 @@ class SubscriptionService:
             return False
 
         return True
+
+    async def _get_active_subscription(self, user_id: int) -> Optional[Subscription]:
+        result = await self.db.execute(
+            select(Subscription).where(
+                Subscription.user_id == user_id,
+                Subscription.status == SubscriptionStatus.active
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def _auto_expire_if_needed(self, subscription: Subscription) -> None:
+        if (
+            subscription.status == SubscriptionStatus.active
+            and subscription.end_date
+            and subscription.end_date < datetime.now(timezone.utc)
+        ):
+            await self._expire_subscription(subscription)
+
+    async def _expire_subscription(self, subscription: Subscription) -> None:
+        subscription.status = SubscriptionStatus.expired
+        subscription.updated_at = datetime.now(timezone.utc)
+        await self.db.commit()
+        logger.info(f"Auto-expired subscription {subscription.id} for user {subscription.user_id}")
+
+    def _get_status_message(self, subscription: Subscription) -> str:
+        if subscription.status == SubscriptionStatus.active:
+            return f"Active {subscription.plan} subscription"
+        if subscription.status == SubscriptionStatus.cancelled:
+            return "Subscription has been cancelled"
+        if subscription.status == SubscriptionStatus.expired:
+            return "Subscription has expired"
+        return "Subscription is pending"
 
