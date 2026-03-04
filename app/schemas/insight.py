@@ -1,11 +1,13 @@
 from datetime import datetime
 from typing import Any, Optional
+
 from pydantic import BaseModel
-from app.models.insight import InsightCategory
+
+from app.enums import DomainEnum
 
 
 class InsightCreate(BaseModel):
-    category: InsightCategory
+    category: DomainEnum
     content: str | dict[str, Any]
     source: Optional[str] = None
     user_id: int = 0
@@ -13,7 +15,7 @@ class InsightCreate(BaseModel):
 
 
 class InsightUpdate(BaseModel):
-    category: Optional[InsightCategory] = None
+    category: Optional[DomainEnum] = None
     content: Optional[str | dict[str, Any]] = None
     source: Optional[str] = None
     is_read: Optional[bool] = None
@@ -22,7 +24,7 @@ class InsightUpdate(BaseModel):
 class InsightOut(BaseModel):
     id: int
     user_id: int
-    category: InsightCategory
+    category: DomainEnum
     content: str | dict[str, Any]
     source: Optional[str] = None
     is_read: bool

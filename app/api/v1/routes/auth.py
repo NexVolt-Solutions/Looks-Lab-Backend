@@ -1,33 +1,19 @@
-"""
-Authentication routes.
-Handles OAuth sign-in, token refresh, and sign-out.
-"""
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
-from google.oauth2 import id_token
-from google.auth.transport import requests as google_requests
 
-from app.core.config import settings
 from app.core.database import get_async_db
+from app.core.config import settings
 from app.core.logging import logger
 from app.core.rate_limit import RateLimits, limiter
 from app.enums import AuthProviderEnum
-from app.schemas.auth import (
-    AppleAuthSchema,
-    GoogleAuthSchema,
-    SignOutResponse,
-    TokenResponse,
-)
+from app.schemas.auth import AppleAuthSchema, GoogleAuthSchema, SignOutResponse, TokenResponse
 from app.services.auth_service import AuthService
 from app.utils.apple_utils import verify_apple_token
+from app.utils.google_utils import verify_google_token
 
 router = APIRouter()
 
-GOOGLE_ISSUERS = {"accounts.google.com", "https://accounts.google.com"}
-
-
-# ── Request Bodies ────────────────────────────────────────────────
 
 class RefreshTokenRequest(BaseModel):
     refresh_token: str
@@ -37,30 +23,18 @@ class SignOutRequest(BaseModel):
     refresh_token: str
 
 
-# ── Routes ────────────────────────────────────────────────────────
-
 @router.post("/google", response_model=TokenResponse)
 @limiter.limit(RateLimits.AUTH)
 async def google_sign_in(
     request: Request,
     payload: GoogleAuthSchema,
-    db: AsyncSession = Depends(get_async_db)
+    db: AsyncSession = Depends(get_async_db),
 ):
     try:
-        idinfo = id_token.verify_oauth2_token(
-            payload.id_token,
-            google_requests.Request(),
-            settings.GOOGLE_CLIENT_ID,
-        )
-
-        iss = idinfo.get("iss", "")
-        if not any(iss.startswith(valid) for valid in GOOGLE_ISSUERS):
-            logger.warning(f"Invalid Google token issuer: {iss}")
-            raise HTTPException(status_code=400, detail="Invalid token issuer")
+        idinfo = verify_google_token(payload.id_token)
 
         email = (idinfo.get("email") or "").lower().strip()
         if not email:
-            logger.warning("Google token missing email")
             raise HTTPException(status_code=400, detail="Google token missing email")
 
         auth_service = AuthService(db)
@@ -75,13 +49,11 @@ async def google_sign_in(
                 "last_google_id_token": payload.id_token,
             }
         )
-
         await auth_service.update_last_login(user.id)
         return await auth_service.issue_tokens(user)
 
-    except ValueError as e:
-        logger.error(f"Google token verification failed: {e}")
-        raise HTTPException(status_code=400, detail=f"Invalid Google token: {e}")
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Google sign-in failed: {e}", exc_info=settings.is_development)
         raise HTTPException(status_code=500, detail="Authentication failed")
@@ -92,14 +64,13 @@ async def google_sign_in(
 async def apple_sign_in(
     request: Request,
     payload: AppleAuthSchema,
-    db: AsyncSession = Depends(get_async_db)
+    db: AsyncSession = Depends(get_async_db),
 ):
     try:
-        token_info = verify_apple_token(payload.id_token)
+        token_info = await verify_apple_token(payload.id_token)
 
         email = (token_info.get("email") or "").lower().strip()
         if not email:
-            logger.warning("Apple token missing email")
             raise HTTPException(status_code=400, detail="Apple token missing email")
 
         auth_service = AuthService(db)
@@ -113,13 +84,11 @@ async def apple_sign_in(
                 "last_apple_id_token": payload.id_token,
             }
         )
-
         await auth_service.update_last_login(user.id)
         return await auth_service.issue_tokens(user)
 
-    except ValueError as e:
-        logger.error(f"Apple token verification failed: {e}")
-        raise HTTPException(status_code=400, detail=f"Invalid Apple token: {e}")
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Apple sign-in failed: {e}", exc_info=settings.is_development)
         raise HTTPException(status_code=500, detail="Authentication failed")
@@ -130,7 +99,7 @@ async def apple_sign_in(
 async def refresh_access_token(
     request: Request,
     body: RefreshTokenRequest,
-    db: AsyncSession = Depends(get_async_db)
+    db: AsyncSession = Depends(get_async_db),
 ):
     try:
         auth_service = AuthService(db)
@@ -148,16 +117,14 @@ async def refresh_access_token(
 async def sign_out(
     request: Request,
     body: SignOutRequest,
-    db: AsyncSession = Depends(get_async_db)
+    db: AsyncSession = Depends(get_async_db),
 ):
     try:
-        auth_service = AuthService(db)
-        await auth_service.revoke_refresh_token(body.refresh_token)
+        await AuthService(db).revoke_refresh_token(body.refresh_token)
         return SignOutResponse(detail="Successfully signed out")
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Sign out failed: {e}", exc_info=settings.is_development)
         raise HTTPException(status_code=500, detail="Sign out failed")
-
 

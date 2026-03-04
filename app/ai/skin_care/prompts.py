@@ -1,22 +1,17 @@
-"""
-Skin care domain AI prompts.
-"""
-
-
 def build_context(answers: list[dict], images: list[dict]) -> dict:
     return {
         "answers": [
             {
                 "step": a.get("step"),
                 "question": a.get("question"),
-                "answer": a.get("answer")
+                "answer": a.get("answer"),
             }
             for a in answers
         ],
         "images": [
             {
                 "view": i.get("view"),
-                "present": bool(i.get("url"))
+                "present": bool(i.get("url")),
             }
             for i in images
         ],
@@ -121,12 +116,7 @@ Return STRICT JSON ONLY with this schema:
         "Do not rinse"
       ],
       "when_to_use": "Night Routine (PM)",
-      "dont_use_with": [
-        "Retinoids",
-        "EUK 134",
-        "Copper Peptides",
-        "Direct Acids"
-      ],
+      "dont_use_with": ["Retinoids", "EUK 134", "Copper Peptides", "Direct Acids"],
       "confidence": 0
     }},
     {{
@@ -141,11 +131,7 @@ Return STRICT JSON ONLY with this schema:
         "Use sunscreen during daytime"
       ],
       "when_to_use": "AM & PM",
-      "dont_use_with": [
-        "Retinoids",
-        "Pure Vitamin C",
-        "Strong exfoliating acids"
-      ],
+      "dont_use_with": ["Retinoids", "Pure Vitamin C", "Strong exfoliating acids"],
       "confidence": 0
     }},
     {{
@@ -160,12 +146,7 @@ Return STRICT JSON ONLY with this schema:
         "Follow with moisturizer"
       ],
       "when_to_use": "AM & PM",
-      "dont_use_with": [
-        "Direct Acids",
-        "EUK 134",
-        "Pure Vitamin C",
-        "Copper Peptides"
-      ],
+      "dont_use_with": ["Direct Acids", "EUK 134", "Pure Vitamin C", "Copper Peptides"],
       "confidence": 0
     }}
   ],
