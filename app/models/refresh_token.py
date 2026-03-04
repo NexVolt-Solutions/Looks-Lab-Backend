@@ -3,8 +3,8 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import String, DateTime, ForeignKey, func, Boolean, text, Index
-from sqlalchemy.orm import relationship, Mapped, mapped_column
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, String, func, text
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
 
@@ -19,58 +19,18 @@ class RefreshToken(Base):
         Index("ix_refresh_token_user", "user_id"),
     )
 
-    # ── Primary Key ───────────────────────────────────────────
-    id: Mapped[int] = mapped_column(
-        primary_key=True,
-        index=True
-    )
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
 
-    # ── Foreign Key ───────────────────────────────────────────
-    user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"),
-        nullable=False,
-        unique=True
-    )
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True)
 
-    # ── Token Data ────────────────────────────────────────────
-    token: Mapped[str] = mapped_column(
-        String(2048),
-        unique=True,
-        nullable=False,
-        index=True
-    )
+    token: Mapped[str] = mapped_column(String(2048), unique=True, nullable=False, index=True)
 
-    # ── State ─────────────────────────────────────────────────
-    is_revoked: Mapped[bool] = mapped_column(
-        Boolean,
-        server_default=text("false"),
-        nullable=False
-    )
-    device_info: Mapped[str | None] = mapped_column(
-        String(255),
-        nullable=True
-    )
+    is_revoked: Mapped[bool] = mapped_column(Boolean, server_default=text("false"), nullable=False)
+    device_info: Mapped[str | None] = mapped_column(String(255))
 
-    # ── Timestamps ────────────────────────────────────────────
-    expires_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        nullable=False
-    )
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        nullable=False
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        onupdate=func.now(),
-        nullable=False
-    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
-    # ── Relationships ─────────────────────────────────────────
-    user: Mapped[User] = relationship(
-        "User",
-        back_populates="refresh_token"
-    )
+    user: Mapped[User] = relationship("User", back_populates="refresh_token")
 

@@ -60,13 +60,6 @@ class DomainService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    def validate_domain(self, domain: str) -> None:
-        if domain not in DomainEnum.values():
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=f"Invalid domain. Must be one of: {', '.join(DomainEnum.values())}"
-            )
-
     async def check_domain_access(self, user_id: int, domain: str) -> None:
         result = await self.db.execute(
             select(OnboardingSession).where(OnboardingSession.user_id == user_id)

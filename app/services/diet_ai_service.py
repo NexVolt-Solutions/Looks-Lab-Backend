@@ -1,19 +1,18 @@
-"""Diet AI service for generating personalized meal plans."""
-import google.generativeai as genai
 import json
 from datetime import datetime, timezone
+from typing import Optional
+
+import google.generativeai as genai
 
 from app.core.config import settings
 from app.core.logging import logger
 from app.schemas.diet import DietFocus
 
-# Configure Gemini
 genai.configure(api_key=settings.GEMINI_API_KEY)
 model = genai.GenerativeModel(settings.GEMINI_MODEL)
 
 
 class DietAIService:
-    """Service for generating AI-powered meal plans."""
 
     @staticmethod
     def calculate_calorie_target(
@@ -24,17 +23,11 @@ class DietAIService:
         activity_level: str,
         focus: DietFocus,
     ) -> int:
-        """
-        Calculate target calories based on user profile and goals.
-        Uses Mifflin-St Jeor Equation.
-        """
-        # Calculate BMR (Basal Metabolic Rate)
         if gender.lower() == "male":
             bmr = (10 * weight_kg) + (6.25 * height_cm) - (5 * age) + 5
         else:
             bmr = (10 * weight_kg) + (6.25 * height_cm) - (5 * age) - 161
 
-        # Activity multipliers
         activity_multipliers = {
             "sedentary": 1.2,
             "light": 1.375,
@@ -43,15 +36,13 @@ class DietAIService:
             "very_active": 1.9,
         }
 
-        # Calculate TDEE (Total Daily Energy Expenditure)
         tdee = bmr * activity_multipliers.get(activity_level.lower(), 1.55)
 
-        # Adjust based on focus
-        if focus == DietFocus.BUILD_MUSCLE:
-            target = tdee + 300  # Caloric surplus
-        elif focus == DietFocus.FATLOSS:
-            target = tdee - 500  # Caloric deficit
-        else:  # MAINTENANCE or CLEAN_ENERGETIC
+        if focus == DietFocus.build_muscle:
+            target = tdee + 300
+        elif focus == DietFocus.fatloss:
+            target = tdee - 500
+        else:
             target = tdee
 
         return int(target)
@@ -60,30 +51,13 @@ class DietAIService:
     def generate_meal_plan(
         focus: DietFocus,
         user_data: dict,
-        calorie_target: int | None = None,
+        calorie_target: Optional[int] = None,
         meal_count: int = 3,
         snack_count: int = 2,
-        dietary_preferences: list[str] | None = None,
-        allergies: list[str] | None = None,
-        cuisine_preference: str | None = None,
+        dietary_preferences: Optional[list[str]] = None,
+        allergies: Optional[list[str]] = None,
+        cuisine_preference: Optional[str] = None,
     ) -> dict:
-        """
-        Generate personalized meal plan using Gemini AI.
-
-        Args:
-            focus: Diet focus area
-            user_data: User profile and preferences
-            calorie_target: Target daily calories (auto-calculated if None)
-            meal_count: Number of main meals
-            snack_count: Number of snacks
-            dietary_preferences: List of dietary preferences
-            allergies: List of allergies
-            cuisine_preference: Preferred cuisine type
-
-        Returns:
-            Structured meal plan with meals and snacks
-        """
-        # Calculate calorie target if not provided
         if calorie_target is None:
             calorie_target = DietAIService.calculate_calorie_target(
                 weight_kg=user_data.get("weight", 70),
@@ -94,17 +68,15 @@ class DietAIService:
                 focus=focus,
             )
 
-        # Build dietary restrictions string
         restrictions = []
         if dietary_preferences:
             restrictions.extend(dietary_preferences)
         if allergies:
-            restrictions.extend([f"No {allergy}" for allergy in allergies])
+            restrictions.extend([f"No {a}" for a in allergies])
 
         restrictions_str = ", ".join(restrictions) if restrictions else "None"
         cuisine_str = cuisine_preference or "Any"
 
-        # Build prompt
         prompt = f"""
 You are a professional nutritionist creating a personalized meal plan.
 
@@ -123,14 +95,14 @@ MEAL PLAN REQUIREMENTS:
 - Number of Meals: {meal_count}
 - Number of Snacks: {snack_count}
 
-MACRONUTRIENT TARGETS (based on focus):
+MACRONUTRIENT TARGETS:
 {DietAIService._get_macro_targets(focus, calorie_target)}
 
-Please generate a meal plan as a JSON object with this EXACT structure:
+Generate a meal plan as a JSON object with this EXACT structure:
 {{
   "focus": "{focus.value}",
   "title": "{focus.value.replace('_', ' ').title()} Meal Plan",
-  "description": "Short motivational description (e.g., 'Improve strength & track your workout progress')",
+  "description": "Short motivational description",
   "calories": {{
     "intake": {calorie_target},
     "activity": "{user_data.get('activity_level', 'moderate')}"
@@ -148,20 +120,10 @@ Please generate a meal plan as a JSON object with this EXACT structure:
       "name": "Meal name",
       "prep_time_minutes": 15,
       "calories": 500,
-      "macros": {{
-        "protein": 30,
-        "carbs": 50,
-        "fats": 15
-      }},
-      "ingredients": [
-        "Ingredient 1 with quantity",
-        "Ingredient 2 with quantity"
-      ],
-      "instructions": [
-        "Step 1",
-        "Step 2"
-      ],
-      "benefits": "Why this meal is good for the focus area"
+      "macros": {{"protein": 30, "carbs": 50, "fats": 15}},
+      "ingredients": ["Ingredient 1 with quantity"],
+      "instructions": ["Step 1", "Step 2"],
+      "benefits": "Why this meal supports the goal"
     }}
   ],
   "snacks": [
@@ -169,18 +131,9 @@ Please generate a meal plan as a JSON object with this EXACT structure:
       "name": "Snack name",
       "prep_time_minutes": 5,
       "calories": 200,
-      "macros": {{
-        "protein": 10,
-        "carbs": 20,
-        "fats": 8
-      }},
-      "ingredients": [
-        "Ingredient 1",
-        "Ingredient 2"
-      ],
-      "instructions": [
-        "Simple preparation step"
-      ]
+      "macros": {{"protein": 10, "carbs": 20, "fats": 8}},
+      "ingredients": ["Ingredient 1"],
+      "instructions": ["Preparation step"]
     }}
   ],
   "daily_totals": {{
@@ -191,32 +144,22 @@ Please generate a meal plan as a JSON object with this EXACT structure:
   }}
 }}
 
-IMPORTANT REQUIREMENTS:
-1. Ensure meals are balanced and meet macronutrient targets
-2. Include variety in ingredients and cuisines
-3. Keep prep times realistic (10-30 min for meals, 2-10 min for snacks)
-4. Provide clear, step-by-step instructions
-5. Calculate total_prep_time_minutes (sum of all prep times)
-6. Ensure daily_totals match sum of all meals and snacks
-7. Respect dietary preferences and allergies
-8. Focus meals should align with the goal (e.g., high protein for build_muscle)
-9. Return ONLY valid JSON, no markdown or extra text
+Rules:
+1. Meals must meet macronutrient targets
+2. Keep prep times realistic (10-30 min meals, 2-10 min snacks)
+3. Calculate total_prep_time_minutes as sum of all prep times
+4. Ensure daily_totals match sum of all meals and snacks
+5. Respect dietary preferences and allergies
+6. Return ONLY valid JSON, no markdown or extra text
 """
 
         try:
-            # Generate with Gemini
             response = model.generate_content(
                 prompt,
-                generation_config=genai.GenerationConfig(
-                    temperature=0.7,
-                    max_output_tokens=3000,
-                )
+                generation_config=genai.GenerationConfig(temperature=0.7, max_output_tokens=3000)
             )
 
-            # Extract JSON from response
             response_text = response.text.strip()
-
-            # Remove markdown code blocks if present
             if response_text.startswith("```json"):
                 response_text = response_text[7:]
             if response_text.startswith("```"):
@@ -224,51 +167,31 @@ IMPORTANT REQUIREMENTS:
             if response_text.endswith("```"):
                 response_text = response_text[:-3]
 
-            response_text = response_text.strip()
-
-            # Parse JSON
-            meal_plan = json.loads(response_text)
-
-            # Add timestamp
+            meal_plan = json.loads(response_text.strip())
             meal_plan["generated_at"] = datetime.now(timezone.utc).isoformat()
 
             logger.info(f"Generated meal plan for focus: {focus.value}")
             return meal_plan
 
         except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse AI response as JSON: {e}")
-            logger.error(f"Response text: {response_text}")
+            logger.error(f"Failed to parse AI meal plan response: {e}")
             raise ValueError("AI generated invalid meal plan format")
-
         except Exception as e:
             logger.error(f"Error generating meal plan: {e}")
             raise
 
     @staticmethod
     def _get_macro_targets(focus: DietFocus, calories: int) -> str:
-        """Get macronutrient distribution based on focus."""
-        if focus == DietFocus.BUILD_MUSCLE:
-            return f"""
-- Protein: 30% ({int(calories * 0.30 / 4)}g)
-- Carbs: 45% ({int(calories * 0.45 / 4)}g)
-- Fats: 25% ({int(calories * 0.25 / 9)}g)
-"""
-        elif focus == DietFocus.FATLOSS:
-            return f"""
-- Protein: 35% ({int(calories * 0.35 / 4)}g)
-- Carbs: 35% ({int(calories * 0.35 / 4)}g)
-- Fats: 30% ({int(calories * 0.30 / 9)}g)
-"""
-        elif focus == DietFocus.CLEAN_ENERGETIC:
-            return f"""
-- Protein: 25% ({int(calories * 0.25 / 4)}g)
-- Carbs: 50% ({int(calories * 0.50 / 4)}g)
-- Fats: 25% ({int(calories * 0.25 / 9)}g)
-"""
-        else:  # MAINTENANCE
-            return f"""
-- Protein: 30% ({int(calories * 0.30 / 4)}g)
-- Carbs: 40% ({int(calories * 0.40 / 4)}g)
-- Fats: 30% ({int(calories * 0.30 / 9)}g)
-"""
+        targets = {
+            DietFocus.build_muscle: (0.30, 0.45, 0.25),
+            DietFocus.fatloss:      (0.35, 0.35, 0.30),
+            DietFocus.clean_energetic: (0.25, 0.50, 0.25),
+            DietFocus.maintenance:  (0.30, 0.40, 0.30),
+        }
+        p, c, f = targets.get(focus, (0.30, 0.40, 0.30))
+        return (
+            f"- Protein: {int(p * 100)}% ({int(calories * p / 4)}g)\n"
+            f"- Carbs: {int(c * 100)}% ({int(calories * c / 4)}g)\n"
+            f"- Fats: {int(f * 100)}% ({int(calories * f / 9)}g)"
+        )
 

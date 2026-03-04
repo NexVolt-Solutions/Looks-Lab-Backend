@@ -1,130 +1,85 @@
-# ══════════════════════════════════════════════════════════════════
-# Looks Lab Backend - .dockerignore
-# Prevents unnecessary files from being copied to Docker image
-# Optimizes build time and reduces image size
-# ══════════════════════════════════════════════════════════════════
-
-# ── Python ────────────────────────────────────────────────────────
+# Python
 __pycache__/
 **/__pycache__/
 *.py[cod]
-*$py.class
 *.so
-.Python
+*.egg
+*.egg-info/
 build/
 dist/
-*.egg-info/
-*.egg
 
-# ── Virtual Environments ──────────────────────────────────────────
+# Virtual environments
 venv/
 env/
 ENV/
 .venv
-.env/
 looks-lab/
 
-# ── Environment Variables ─────────────────────────────────────────
+# Environment files
 .env
-.env.local
-.env.production
-.env.development
-.env.docker
+.env.*
 !.env.example
 
-# ── IDEs & Editors ────────────────────────────────────────────────
+# IDE & OS
 .vscode/
 .idea/
-*.swp
-*.swo
-*~
 .DS_Store
 Thumbs.db
-*.sublime-project
-*.sublime-workspace
+*.swp
+*.swo
 
-# ── Git ───────────────────────────────────────────────────────────
+# Git
 .git/
 .gitignore
 .gitattributes
 
-# ── Database ──────────────────────────────────────────────────────
+# Database
 *.sqlite3
 *.sqlite
 *.db
-*.db-journal
 
-# ── Logs ──────────────────────────────────────────────────────────
+# Logs
 *.log
 logs/
-*.log.*
 
-# ── Testing & Coverage ────────────────────────────────────────────
+# Testing
 .pytest_cache/
 .coverage
 .coverage.*
 htmlcov/
 .tox/
-.nox/
 .hypothesis/
 tests/
 test_*.py
 *_test.py
 
-# ── Media & Uploads ───────────────────────────────────────────────
+# Media & uploads
 media/
 uploads/
-static/uploads/
 
-# ── Temporary Files ───────────────────────────────────────────────
+# Temp
 tmp/
 temp/
 *.tmp
 .cache/
 
-# ── Documentation ─────────────────────────────────────────────────
+# Docs
 docs/
 *.md
 !README.md
-LICENSE
-CONTRIBUTING.md
 
-# ── Docker ────────────────────────────────────────────────────────
-Dockerfile*
-!Dockerfile
+# Docker files (not needed inside image)
 docker-compose*.yml
-!docker-compose.yml
 .dockerignore
 
-# ── CI/CD ─────────────────────────────────────────────────────────
+# CI/CD
 .github/
 .gitlab-ci.yml
-.travis.yml
 .circleci/
-.azure-pipelines.yml
 
-# ── Jupyter Notebook ──────────────────────────────────────────────
-.ipynb_checkpoints/
-*.ipynb
-
-# ── Project Specific ──────────────────────────────────────────────
-# Test files
-test_gemini.py
-
-# Backup files
+# Misc
 *.bak
 *.backup
-
-# Alembic cache (keep structure)
+*.ipynb
 alembic/versions/__pycache__/
-
-# Postman collections (optional - include if needed for docs)
-*.postman_collection.json
-*.postman_environment.json
-
-# Screenshots/images for docs
-screenshots/
-images/
-
-# ── End ───────────────────────────────────────────────────────────
 

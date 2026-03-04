@@ -1,7 +1,3 @@
-"""
-Main FastAPI application entry point.
-Looks Lab API — powered by FastAPI.
-"""
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -18,26 +14,15 @@ from app.core.request_id import RequestIDMiddleware
 from app.core.security import SecurityHeadersMiddleware
 
 
-# ── Lifespan ──────────────────────────────────────────────────────
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Application startup and shutdown lifecycle."""
     setup_logging()
-    logger.info("Starting Looks Lab API...")
-    logger.info(f"Environment: {settings.ENV}")
-
+    logger.info(f"Starting Looks Lab API — env: {settings.ENV}")
     await init_async_db()
-    logger.info("Database connection established")
-
     yield
-
-    logger.info("Shutting down Looks Lab API...")
     await close_async_db()
-    logger.info("Database connection closed")
+    logger.info("Looks Lab API shut down")
 
-
-# ── App Instance ──────────────────────────────────────────────────
 
 app = FastAPI(
     title="Looks Lab API",
@@ -50,18 +35,13 @@ app = FastAPI(
     openapi_url="/openapi.json",
 )
 
-
-
-# ── Middleware ────────────────────────────────────────────────────
-
 app.add_middleware(RequestIDMiddleware)
 
 if settings.ENABLE_SECURITY_HEADERS:
     app.add_middleware(SecurityHeadersMiddleware)
 
-trusted_hosts = settings.trusted_hosts_list
-if trusted_hosts:
-    app.add_middleware(TrustedHostMiddleware, allowed_hosts=trusted_hosts)
+if settings.trusted_hosts_list:
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.trusted_hosts_list)
 
 app.add_middleware(
     CORSMiddleware,
@@ -72,22 +52,9 @@ app.add_middleware(
     expose_headers=["X-Request-ID", "X-Response-Time"],
 )
 
-
-# ── Rate Limiting ─────────────────────────────────────────────────
-
 setup_rate_limiting(app)
-
-
-# ── Exception Handlers ────────────────────────────────────────────
-
 setup_exception_handlers(app)
 
-
-# ── Routes ────────────────────────────────────────────────────────
-
-# Include all API routes
 app.include_router(router)
-
-# Health check at root level
 app.get("/health", tags=["System"])(health_check)
 

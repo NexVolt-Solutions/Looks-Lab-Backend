@@ -22,6 +22,7 @@ from app.schemas.domain import (
 )
 from app.services.domain_service import DomainService
 from app.services.image_service import ImageService
+from app.utils.domain_utils import validate_domain
 from app.utils.jwt_utils import get_current_user
 
 router = APIRouter()
@@ -127,7 +128,7 @@ async def get_domain_questions(
     current_user: User = Depends(get_current_user),
 ):
     service = DomainService(db)
-    service.validate_domain(domain)
+    validate_domain(domain)
     return await service.get_domain_questions(domain)
 
 
@@ -140,7 +141,7 @@ async def get_domain_flow(
     current_user: User = Depends(get_current_user),
 ):
     service = DomainService(db)
-    service.validate_domain(domain)
+    validate_domain(domain)
     await service.check_domain_access(current_user.id, domain)
     return await service.next_or_complete(current_user.id, domain)
 
@@ -156,7 +157,7 @@ async def submit_domain_answer(
 ):
     service = DomainService(db)
     payload.user_id = current_user.id
-    service.validate_domain(domain)
+    validate_domain(domain)
     await service.check_domain_access(current_user.id, domain)
     await service.save_answer(domain, payload)
     return await service.next_or_complete(current_user.id, domain)
@@ -171,7 +172,7 @@ async def get_domain_answers(
     current_user: User = Depends(get_current_user),
 ):
     service = DomainService(db)
-    service.validate_domain(domain)
+    validate_domain(domain)
     answers = await service.get_user_answers(domain, current_user.id)
     return {"user_id": current_user.id, "domain": domain, "answers": answers}
 
@@ -185,7 +186,7 @@ async def get_domain_progress(
     current_user: User = Depends(get_current_user),
 ):
     service = DomainService(db)
-    service.validate_domain(domain)
+    validate_domain(domain)
     return await service.calculate_progress(domain, current_user.id)
 
 
@@ -198,7 +199,7 @@ async def retry_ai_processing(
     current_user: User = Depends(get_current_user),
 ):
     service = DomainService(db)
-    service.validate_domain(domain)
+    validate_domain(domain)
     await service.check_domain_access(current_user.id, domain)
     return await service.next_or_complete(current_user.id, domain)
 
@@ -213,7 +214,7 @@ async def check_domain_access(
 ):
     service = DomainService(db)
     try:
-        service.validate_domain(domain)
+        validate_domain(domain)
         await service.check_domain_access(current_user.id, domain)
         return {"has_access": True, "domain": domain, "user_id": current_user.id, "message": "Access granted"}
     except HTTPException as e:

@@ -1,25 +1,14 @@
-"""
-Hair care domain AI prompts.
-"""
-
-
 def build_context(answers: list[dict], images: list[dict]) -> dict:
     return {
         "answers": [
             {
                 "step": a.get("step"),
                 "question": a.get("question"),
-                "answer": a.get("answer")
+                "answer": a.get("answer"),
             }
             for a in answers
         ],
-        "images": [
-            {
-                "view": i.get("view"),
-                "present": bool(i.get("url"))
-            }
-            for i in images
-        ],
+        "images": [],
     }
 
 
@@ -99,11 +88,8 @@ Return STRICT JSON ONLY with this schema:
         "Repeat if needed"
       ],
       "when_to_use": "AM or PM (during hair wash)",
-      "dont_use_with": [
-        "Harsh sulfate shampoos",
-        "Overlapping medicated shampoos"
-      ],
-      "confidence": 0-100
+      "dont_use_with": ["Harsh sulfate shampoos", "Overlapping medicated shampoos"],
+      "confidence": 0
     }},
     {{
       "name": "Lightweight Scalp Serum",
@@ -116,11 +102,8 @@ Return STRICT JSON ONLY with this schema:
         "Do not rinse"
       ],
       "when_to_use": "Daily (AM or PM)",
-      "dont_use_with": [
-        "Alcohol-based scalp products",
-        "Heavy oils layer"
-      ],
-      "confidence": 0-100
+      "dont_use_with": ["Alcohol-based scalp products", "Heavy oils layer"],
+      "confidence": 0
     }},
     {{
       "name": "Minoxidil Foam",
@@ -133,10 +116,8 @@ Return STRICT JSON ONLY with this schema:
         "Wash hands after application"
       ],
       "when_to_use": "As recommended by AI (usually once or twice daily)",
-      "dont_use_with": [
-        "Heavy styling products immediately after"
-      ],
-      "confidence": 0-100
+      "dont_use_with": ["Heavy styling products immediately after"],
+      "confidence": 0
     }}
   ],
   "motivational_message": "Consistency is key — your scalp health will improve with daily care!"

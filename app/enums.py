@@ -7,7 +7,6 @@ class AuthProviderEnum(str, enum.Enum):
 
 
 class DomainEnum(str, enum.Enum):
-    """Valid domain values — single source of truth."""
     SKINCARE  = "skincare"
     HAIRCARE  = "haircare"
     FASHION   = "fashion"
@@ -19,6 +18,5 @@ class DomainEnum(str, enum.Enum):
 
     @classmethod
     def values(cls) -> list[str]:
-        """Return ordered list of all domain values."""
         return [item.value for item in cls]
 
