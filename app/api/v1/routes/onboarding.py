@@ -12,6 +12,7 @@ from app.models.user import User
 from app.schemas.onboarding import (
     OnboardingAnswerCreate,
     OnboardingAnswersResponse,
+    OnboardingQuestionOut,
     OnboardingSessionOut,
     WellnessMetricsOut,
 )
@@ -21,12 +22,13 @@ from app.utils.jwt_utils import get_current_user
 router = APIRouter()
 
 
-@router.get("/questions")
+@router.get("/questions", response_model=list[OnboardingQuestionOut])
 @limiter.limit(RateLimits.DEFAULT)
-async def get_all_questions(
+async def get_onboarding_questions(
     request: Request,
     db: AsyncSession = Depends(get_async_db),
 ):
+    """Returns only general onboarding questions shown to every new user."""
     result = await db.execute(select(OnboardingQuestion).order_by(OnboardingQuestion.id))
     return result.scalars().all()
 
@@ -74,8 +76,18 @@ async def get_session_answers(
 @router.get("/domains")
 @limiter.limit(RateLimits.DEFAULT)
 async def get_available_domains(request: Request):
+    """Returns list of available domains the user can purchase."""
     return {
-        "domains": ["skincare", "haircare", "fashion", "workout", "quit porn", "diet", "height", "facial"]
+        "domains": [
+            "skincare",
+            "haircare",
+            "fashion",
+            "workout",
+            "quit_porn",
+            "diet",
+            "height",
+            "facial",
+        ]
     }
 
 
@@ -88,7 +100,11 @@ async def select_domain(
     db: AsyncSession = Depends(get_async_db),
 ):
     session = await OnboardingService(db).select_domain(session_id, domain)
-    return {"status": "domain_selected", "session_id": str(session.id), "domain": session.selected_domain}
+    return {
+        "status":     "domain_selected",
+        "session_id": str(session.id),
+        "domain":     session.selected_domain,
+    }
 
 
 @router.post("/sessions/{session_id}/payment")
@@ -99,7 +115,11 @@ async def confirm_payment(
     db: AsyncSession = Depends(get_async_db),
 ):
     session = await OnboardingService(db).confirm_payment(session_id)
-    return {"status": "payment_confirmed", "session_id": str(session.id), "domain": session.selected_domain}
+    return {
+        "status":     "payment_confirmed",
+        "session_id": str(session.id),
+        "domain":     session.selected_domain,
+    }
 
 
 @router.patch("/sessions/{session_id}/link")
@@ -110,8 +130,16 @@ async def link_session_to_user_route(
     db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(get_current_user),
 ):
-    session = await OnboardingService(db).link_session_to_user(session_id=session_id, user_id=current_user.id)
-    return {"status": "linked", "user_id": current_user.id, "session_id": str(session.id), "domain": session.selected_domain}
+    session = await OnboardingService(db).link_session_to_user(
+        session_id=session_id,
+        user_id=current_user.id
+    )
+    return {
+        "status":     "linked",
+        "user_id":    current_user.id,
+        "session_id": str(session.id),
+        "domain":     session.selected_domain,
+    }
 
 
 @router.get("/users/me/answers", response_model=OnboardingAnswersResponse)
@@ -132,4 +160,5 @@ async def get_wellness_metrics(
     current_user: User = Depends(get_current_user),
 ):
     return await OnboardingService(db).get_wellness_metrics(current_user.id)
-
+    
+    

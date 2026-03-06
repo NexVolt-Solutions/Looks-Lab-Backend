@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app.api.v1.api_router import router, health_check
 from app.core.config import settings
@@ -54,6 +55,8 @@ app.add_middleware(
 
 setup_rate_limiting(app)
 setup_exception_handlers(app)
+
+app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 app.include_router(router)
 app.get("/health", tags=["System"])(health_check)

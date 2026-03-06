@@ -1,6 +1,8 @@
 from datetime import datetime
 from typing import Any, Optional
+
 from pydantic import BaseModel, ConfigDict, Field
+
 from app.models.domain import QuestionType
 from app.schemas.subscription import SubscriptionStatus
 
@@ -77,6 +79,7 @@ class DomainFlowOut(BaseModel):
 
 class DomainProgressItem(BaseModel):
     domain: str
+    icon_url: Optional[str] = None
     progress_percent: float = Field(..., ge=0, le=100)
     answered_questions: int = Field(..., ge=0)
     total_questions: int = Field(..., ge=0)
@@ -121,4 +124,5 @@ class BarcodeProductOut(BaseModel):
     nutrition: NutritionFacts
     image_url: Optional[str] = None
     tip: Optional[str] = None
-
+    
+    

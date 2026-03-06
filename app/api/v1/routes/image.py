@@ -7,7 +7,7 @@ from app.core.file_validation import validate_upload_file
 from app.core.rate_limit import RateLimits, limiter
 from app.models.image import ImageStatus, ImageType
 from app.models.user import User
-from app.schemas.image import ImageOut, ImageUpdate, ImageUrlOut
+from app.schemas.image import ImageOut, ImageUpdate, SimpleImageOut
 from app.services.image_service import ImageService
 from app.utils.jwt_utils import get_current_user
 
@@ -18,9 +18,32 @@ class AnalysisResultPayload(BaseModel):
     analysis_result: dict | str
 
 
-@router.post("/", response_model=ImageOut)
+@router.post("/upload/simple", response_model=SimpleImageOut)
 @limiter.limit(RateLimits.UPLOAD)
-async def upload_image(
+async def upload_simple_image(
+    request: Request,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_async_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Simple image upload with no domain or view metadata.
+    Use this for profile photos, onboarding screens, or any
+    general purpose image upload not tied to a specific domain.
+    """
+    await validate_upload_file(file)
+    return await ImageService(db).upload_image(
+        file=file,
+        user_id=current_user.id,
+        domain=None,
+        view=None,
+        image_type=ImageType.uploaded,
+    )
+
+
+@router.post("/upload", response_model=ImageOut)
+@limiter.limit(RateLimits.UPLOAD)
+async def upload_domain_image(
     request: Request,
     file: UploadFile = File(...),
     domain: str | None = None,
@@ -29,18 +52,25 @@ async def upload_image(
     db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(get_current_user),
 ):
+    """
+    Domain image upload with optional domain and view metadata.
+    Use this when uploading images for AI analysis (skincare, haircare, facial, etc).
+    - domain: the domain this image belongs to e.g. skincare, haircare
+    - view: the angle/type of photo e.g. front, side, hair_top
+    """
     await validate_upload_file(file)
     return await ImageService(db).upload_image(
         file=file,
         user_id=current_user.id,
         domain=domain,
         view=view,
-        image_type=image_type
+        image_type=image_type,
     )
 
 
-@router.get("/", response_model=list[ImageOut])
-async def get_my_images(
+@router.get("/album", response_model=list[ImageOut])
+@limiter.limit(RateLimits.DEFAULT)
+async def get_my_album(
     request: Request,
     domain: str | None = Query(None),
     view: str | None = Query(None),
@@ -52,12 +82,14 @@ async def get_my_images(
         user_id=current_user.id,
         domain=domain,
         view=view,
-        image_status=image_status
+        image_status=image_status,
     )
 
 
 @router.get("/{image_id}", response_model=ImageOut)
+@limiter.limit(RateLimits.DEFAULT)
 async def get_image(
+    request: Request,
     image_id: int,
     db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(get_current_user),
@@ -65,21 +97,11 @@ async def get_image(
     return await ImageService(db).get_image(image_id, current_user.id)
 
 
-@router.get("/{image_id}/url", response_model=ImageUrlOut)
-async def get_image_url(
-    image_id: int,
-    expires_in: int = Query(3600, ge=60, le=86400),
-    db: AsyncSession = Depends(get_async_db),
-    current_user: User = Depends(get_current_user),
-):
-    service = ImageService(db)
-    image = await service.get_image(image_id, current_user.id)
-    url = service.get_image_url(image, expires_in)
-    return ImageUrlOut(image_id=image_id, url=url, expires_in=expires_in)
-
 
 @router.patch("/{image_id}", response_model=ImageOut)
+@limiter.limit(RateLimits.DEFAULT)
 async def update_image(
+    request: Request,
     image_id: int,
     payload: ImageUpdate,
     db: AsyncSession = Depends(get_async_db),
@@ -89,11 +111,14 @@ async def update_image(
 
 
 @router.delete("/{image_id}")
+@limiter.limit(RateLimits.DEFAULT)
 async def delete_image(
+    request: Request,
     image_id: int,
     db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(get_current_user),
 ):
     await ImageService(db).delete_image(image_id, current_user.id)
     return {"status": "deleted", "image_id": image_id}
-
+    
+    

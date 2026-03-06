@@ -1,7 +1,6 @@
 from datetime import datetime
 from typing import Optional
 from pydantic import BaseModel, Field
-
 from app.schemas.base import UserBase
 from app.schemas.subscription import SubscriptionOut
 
@@ -27,16 +26,16 @@ class UserOut(UserBase):
     model_config = {"from_attributes": True}
 
 
-class DailyScore(BaseModel):
-    day: str
-    date: str
+class DomainWeeklyScore(BaseModel):
+    domain: str
     score: float = Field(..., ge=0, le=100)
+    has_data: bool
+    icon_url: Optional[str] = None
 
 
 class WeeklyProgressOut(BaseModel):
     user_id: int
-    labels: list[str]
-    scores: list[float]
-    days: list[DailyScore]
-    week_average: float = Field(..., ge=0, le=100)
-
+    domains: list[DomainWeeklyScore]
+    weekly_average: float = Field(..., ge=0, le=100)
+    
+    

@@ -9,9 +9,9 @@ from app.schemas.base import UserBase
 
 
 class SubscriptionInterval(str, Enum):
-    week = "week"
+    week  = "week"
     month = "month"
-    year = "year"
+    year  = "year"
 
 
 class SubscriptionPlanOut(BaseModel):
@@ -49,19 +49,12 @@ class SubscriptionOut(BaseModel):
     status: SubscriptionStatus
     start_date: datetime
     end_date: Optional[datetime] = None
+    cancelled_at: Optional[datetime] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
     payment_id: Optional[str] = None
     user: Optional[UserBase] = None
 
     model_config = {"from_attributes": True}
-
-
-class SubscriptionStatusResponse(BaseModel):
-    has_subscription: bool
-    status: Optional[SubscriptionStatus] = None
-    plan: Optional[PlanType] = None
-    access_granted: bool
-    end_date: Optional[datetime] = None
-    message: str
-
+    
+    

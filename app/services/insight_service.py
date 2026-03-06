@@ -1,6 +1,8 @@
+from datetime import datetime, timezone, timedelta
 from typing import Optional
+
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logging import logger
@@ -13,20 +15,38 @@ class InsightService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def create_insight(self, payload: InsightCreate) -> Insight:
+    async def create_or_update_insight(self, payload: InsightCreate) -> Insight:
+        result = await self.db.execute(
+            select(Insight).where(
+                Insight.user_id == payload.user_id,
+                Insight.category == payload.category,
+            )
+        )
+        existing = result.scalar_one_or_none()
+
+        if existing:
+            existing.content = payload.content
+            existing.source = payload.source
+            existing.score = payload.score
+            existing.is_read = False
+            existing.updated_at = datetime.now(timezone.utc)
+            await self.db.commit()
+            await self.db.refresh(existing)
+            logger.info(f"Updated {payload.category} insight for user {payload.user_id} — score: {payload.score}")
+            return existing
+
         insight = Insight(
             user_id=payload.user_id,
             category=payload.category,
             content=payload.content,
             source=payload.source,
+            score=payload.score,
             is_read=False,
         )
-
         self.db.add(insight)
         await self.db.commit()
         await self.db.refresh(insight)
-
-        logger.info(f"Created {payload.category} insight for user {payload.user_id}")
+        logger.info(f"Created {payload.category} insight for user {payload.user_id} — score: {payload.score}")
         return insight
 
     async def get_insight(self, insight_id: int, user_id: int) -> Insight:
@@ -35,7 +55,6 @@ class InsightService:
 
         if not insight:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Insight not found")
-
         if insight.user_id != user_id:
             logger.warning(f"User {user_id} attempted to access insight {insight_id} owned by {insight.user_id}")
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to access this insight")
@@ -58,16 +77,23 @@ class InsightService:
         result = await self.db.execute(query)
         return list(result.scalars().all())
 
+    async def get_insight_by_domain(self, user_id: int, domain: str) -> Optional[Insight]:
+        result = await self.db.execute(
+            select(Insight).where(
+                Insight.user_id == user_id,
+                Insight.category == domain,
+            )
+        )
+        return result.scalar_one_or_none()
+
     async def mark_as_read(self, insight_id: int, user_id: int) -> Insight:
         insight = await self.get_insight(insight_id, user_id)
-
         if insight.is_read:
             return insight
 
         insight.is_read = True
         await self.db.commit()
         await self.db.refresh(insight)
-
         logger.info(f"Marked insight {insight_id} as read for user {user_id}")
         return insight
 
@@ -80,18 +106,53 @@ class InsightService:
             insight.source = payload.source
         if payload.category is not None:
             insight.category = payload.category
+        if payload.score is not None:
+            insight.score = payload.score
         if payload.is_read is not None:
             insight.is_read = payload.is_read
 
         await self.db.commit()
         await self.db.refresh(insight)
-
         logger.info(f"Updated insight {insight_id} for user {user_id}")
         return insight
 
-    async def delete_insight(self, insight_id: int, user_id: int) -> None:
-        insight = await self.get_insight(insight_id, user_id)
-        await self.db.delete(insight)
-        await self.db.commit()
-        logger.info(f"Deleted insight {insight_id} for user {user_id}")
+    async def get_weekly_scores(self, user_id: int) -> dict:
+        """
+        Returns weekly progress scores per domain.
+        Queries all insights for the user and returns score per domain.
+        Score comes from AI output saved when domain was completed.
+        """
+        today = datetime.now(timezone.utc).date()
+        monday = today - timedelta(days=today.weekday())
+        week_start = datetime.combine(monday, datetime.min.time()).replace(tzinfo=timezone.utc)
+
+        result = await self.db.execute(
+            select(Insight).where(Insight.user_id == user_id)
+        )
+        insights = result.scalars().all()
+
+        domain_scores = {}
+        for insight in insights:
+            domain = str(insight.category)
+            score = insight.score or 0.0
+            domain_scores[domain] = {
+                "domain": domain,
+                "score": round(score, 1),
+                "icon_url": _DOMAIN_ICONS.get(domain),
+                "has_data": insight.score is not None,
+            }
+
+        return domain_scores
+
+
+_DOMAIN_ICONS = {
+    "skincare":  "https://api.lookslabai.com/static/icons/SkinCare.jpg",
+    "haircare":  "https://api.lookslabai.com/static/icons/Hair.png",
+    "workout":   "https://api.lookslabai.com/static/icons/Workout.jpg",
+    "diet":      "https://api.lookslabai.com/static/icons/Diet.jpg",
+    "facial":    "https://api.lookslabai.com/static/icons/Facial.jpg",
+    "fashion":   "https://api.lookslabai.com/static/icons/Fashion.png",
+    "height":    "https://api.lookslabai.com/static/icons/Height.jpg",
+    "quit_porn": "https://api.lookslabai.com/static/icons/QuitPorn.jpg",
+}
 

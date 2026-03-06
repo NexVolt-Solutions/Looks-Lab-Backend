@@ -25,24 +25,25 @@ class ImageService:
         user_id: int,
         domain: Optional[str] = None,
         view: Optional[str] = None,
-        image_type: Optional[ImageType] = None
+        image_type: Optional[ImageType] = None,
     ) -> Image:
         try:
             destination_path = BaseStorage.generate_path(
                 user_id=user_id,
                 domain=domain or "general",
                 filename=file.filename or "upload.jpg",
-                view=view
+                view=view,
             )
 
+            # Read once — use for both file_size and storage upload
             content = await file.read()
             file_size = len(content)
-            await file.seek(0)
 
+            import io
             file_path = self._storage.upload(
-                file=file.file,
+                file=io.BytesIO(content),
                 destination_path=destination_path,
-                content_type=file.content_type
+                content_type=file.content_type,
             )
 
             url = self._storage.get_url(file_path)
@@ -58,14 +59,14 @@ class ImageService:
                 status=ImageStatus.pending,
                 domain=domain,
                 view=view,
-                uploaded_at=datetime.now(timezone.utc)
+                uploaded_at=datetime.now(timezone.utc),
             )
 
             self.db.add(image)
             await self.db.commit()
             await self.db.refresh(image)
 
-            logger.info(f"Uploaded image {image.id} for user {user_id} ({domain}/{view}) — {file_size / 1024:.1f}KB")
+            logger.info(f"Uploaded image {image.id} for user {user_id} ({domain or 'general'}/{view or 'none'}) — {file_size / 1024:.1f}KB")
             return image
 
         except HTTPException:
@@ -73,29 +74,6 @@ class ImageService:
         except Exception as e:
             logger.error(f"Image upload failed for user {user_id}: {e}", exc_info=settings.is_development)
             raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Image upload failed")
-
-    async def create_image_record(self, payload: ImageCreate) -> Image:
-        image = Image(
-            user_id=payload.user_id,
-            file_path=payload.file_path,
-            s3_key=payload.s3_key,
-            url=payload.url,
-            mime_type=payload.mime_type,
-            file_size=payload.file_size,
-            image_type=payload.image_type,
-            status=payload.status or ImageStatus.pending,
-            analysis_result=payload.analysis_result,
-            domain=payload.domain,
-            view=payload.view,
-            uploaded_at=datetime.now(timezone.utc),
-        )
-
-        self.db.add(image)
-        await self.db.commit()
-        await self.db.refresh(image)
-
-        logger.info(f"Created image record {image.id} for user {payload.user_id}")
-        return image
 
     async def get_image(self, image_id: int, user_id: int) -> Image:
         result = await self.db.execute(select(Image).where(Image.id == image_id))
@@ -115,7 +93,7 @@ class ImageService:
         user_id: int,
         domain: Optional[str] = None,
         view: Optional[str] = None,
-        image_status: Optional[ImageStatus] = None
+        image_status: Optional[ImageStatus] = None,
     ) -> list[Image]:
         query = select(Image).where(Image.user_id == user_id)
 
@@ -204,4 +182,5 @@ class ImageService:
         await self.db.commit()
 
         logger.info(f"Deleted image {image_id} for user {user_id}")
-
+        
+        

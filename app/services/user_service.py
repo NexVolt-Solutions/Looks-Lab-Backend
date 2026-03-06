@@ -1,12 +1,13 @@
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import HTTPException, status
-from sqlalchemy import select, func
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logging import logger
-from app.models.domain import DomainAnswer, DomainQuestion
+from app.enums import DomainEnum
+from app.models.insight import Insight
 from app.models.user import User
 from app.schemas.user import UserUpdate
 
@@ -19,11 +20,9 @@ class UserService:
     async def get_user_by_id(self, user_id: int) -> User:
         result = await self.db.execute(select(User).where(User.id == user_id))
         user = result.scalar_one_or_none()
-
         if not user:
             logger.warning(f"User {user_id} not found")
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-
         await self.db.refresh(user, attribute_names=["subscription"])
         return user
 
@@ -37,7 +36,6 @@ class UserService:
     async def update_user(self, user_id: int, payload: UserUpdate) -> User:
         user = await self.get_user_by_id(user_id)
         changes = []
-
         fields = ["name", "age", "gender", "profile_image", "notifications_enabled"]
         for field in fields:
             new_val = getattr(payload, field)
@@ -61,44 +59,59 @@ class UserService:
         logger.info(f"Deleted user {user_id} ({email})")
 
     async def get_weekly_progress(self, user_id: int) -> dict:
-        today = datetime.now(timezone.utc).date()
-        monday = today - timedelta(days=today.weekday())
-        week_dates = [monday + timedelta(days=i) for i in range(7)]
-        day_labels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+        """
+        Returns weekly progress scores per domain.
 
-        total_result = await self.db.execute(select(func.count(DomainQuestion.id)))
-        total_questions = total_result.scalar() or 1
+        Each domain shows the AI score saved when the user completed
+        their domain questions. Only purchased domains have a real score.
+        Unpurchased domains show 0.0 with has_data=False.
 
+        The weekly_average is calculated only from domains that have data.
+        """
+        # Fetch all insights for this user (one per domain max)
         result = await self.db.execute(
-            select(DomainAnswer)
-            .where(DomainAnswer.user_id == user_id)
-            .order_by(DomainAnswer.completed_at.asc())
+            select(Insight).where(Insight.user_id == user_id)
         )
-        all_answers = result.scalars().all()
+        insights = {str(i.category): i for i in result.scalars().all()}
 
-        days = []
-        scores = []
+        # Build score for every domain — 0 if not purchased/completed
+        domains = []
+        scores_with_data = []
 
-        for date, label in zip(week_dates, day_labels):
-            end_of_day = datetime.combine(
-                date + timedelta(days=1),
-                datetime.min.time()
-            ).replace(tzinfo=timezone.utc)
+        for domain in DomainEnum.values():
+            insight = insights.get(domain)
+            if insight and insight.score is not None:
+                score = round(insight.score, 1)
+                has_data = True
+                scores_with_data.append(score)
+            else:
+                score = 0.0
+                has_data = False
 
-            answered_count = sum(
-                1 for a in all_answers
-                if a.completed_at and a.completed_at < end_of_day
-            )
-            score = min(round((answered_count / total_questions) * 100, 1), 100.0)
+            domains.append({
+                "domain":   domain,
+                "score":    score,
+                "has_data": has_data,
+                "icon_url": _DOMAIN_ICONS.get(domain),
+            })
 
-            days.append({"day": label, "date": date.strftime("%Y-%m-%d"), "score": score})
-            scores.append(score)
+        weekly_average = round(sum(scores_with_data) / len(scores_with_data), 1) if scores_with_data else 0.0
 
         return {
-            "user_id": user_id,
-            "labels": day_labels,
-            "scores": scores,
-            "days": days,
-            "week_average": round(sum(scores) / len(scores), 1) if scores else 0.0
+            "user_id":        user_id,
+            "domains":        domains,
+            "weekly_average": weekly_average,
         }
+
+
+_DOMAIN_ICONS = {
+    "skincare":  "https://api.lookslabai.com/static/icons/SkinCare.jpg",
+    "haircare":  "https://api.lookslabai.com/static/icons/Hair.png",
+    "workout":   "https://api.lookslabai.com/static/icons/Workout.jpg",
+    "diet":      "https://api.lookslabai.com/static/icons/Diet.jpg",
+    "facial":    "https://api.lookslabai.com/static/icons/Facial.jpg",
+    "fashion":   "https://api.lookslabai.com/static/icons/Fashion.png",
+    "height":    "https://api.lookslabai.com/static/icons/Height.jpg",
+    "quit_porn": "https://api.lookslabai.com/static/icons/QuitPorn.jpg",
+}
 
