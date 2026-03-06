@@ -58,9 +58,16 @@ class OnboardingSessionOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class WellnessItem(BaseModel):
+    value: Optional[AnswerType] = None
+    icon_url: str
+
+
 class WellnessMetricsOut(BaseModel):
-    height: Optional[AnswerType] = None
-    weight: Optional[AnswerType] = None
-    sleep_hours: Optional[AnswerType] = None
-    water_intake: Optional[AnswerType] = None
+    height: WellnessItem
+    weight: WellnessItem
+    sleep_hours: WellnessItem
+    water_intake: WellnessItem
     daily_quote: str = Field(min_length=1)
+    
+    

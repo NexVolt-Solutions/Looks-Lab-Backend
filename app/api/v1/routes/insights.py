@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_async_db
 from app.core.rate_limit import RateLimits, limiter
 from app.models.user import User
-from app.schemas.insight import InsightCreate, InsightUpdate, InsightOut, InsightListOut
+from app.schemas.insight import InsightOut, InsightListOut
 from app.services.insight_service import InsightService
 from app.utils.jwt_utils import get_current_user
 
@@ -12,6 +12,7 @@ router = APIRouter()
 
 
 @router.get("/me", response_model=InsightListOut)
+@limiter.limit(RateLimits.DEFAULT)
 async def get_my_insights(
     request: Request,
     domain: str | None = Query(None),
@@ -27,24 +28,29 @@ async def get_my_insights(
     return InsightListOut(
         insights=insights,
         total=len(insights),
-        unread_count=sum(1 for i in insights if not i.is_read)
+        unread_count=sum(1 for i in insights if not i.is_read),
     )
 
 
-@router.post("/", response_model=InsightOut)
+@router.get("/me/domain/{domain}", response_model=InsightOut)
 @limiter.limit(RateLimits.DEFAULT)
-async def create_insight(
+async def get_my_domain_insight(
     request: Request,
-    payload: InsightCreate,
+    domain: str,
     db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(get_current_user),
 ):
-    payload.user_id = current_user.id
-    return await InsightService(db).create_insight(payload)
+    insight = await InsightService(db).get_insight_by_domain(current_user.id, domain)
+    if not insight:
+        from fastapi import HTTPException, status
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"No insight found for domain '{domain}'")
+    return insight
 
 
 @router.get("/{insight_id}", response_model=InsightOut)
+@limiter.limit(RateLimits.DEFAULT)
 async def get_insight(
+    request: Request,
     insight_id: int,
     db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(get_current_user),
@@ -53,30 +59,13 @@ async def get_insight(
 
 
 @router.patch("/{insight_id}/read", response_model=InsightOut)
+@limiter.limit(RateLimits.DEFAULT)
 async def mark_insight_read(
+    request: Request,
     insight_id: int,
     db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(get_current_user),
 ):
     return await InsightService(db).mark_as_read(insight_id, current_user.id)
-
-
-@router.patch("/{insight_id}", response_model=InsightOut)
-async def update_insight(
-    insight_id: int,
-    payload: InsightUpdate,
-    db: AsyncSession = Depends(get_async_db),
-    current_user: User = Depends(get_current_user),
-):
-    return await InsightService(db).update_insight(insight_id, current_user.id, payload)
-
-
-@router.delete("/{insight_id}")
-async def delete_insight(
-    insight_id: int,
-    db: AsyncSession = Depends(get_async_db),
-    current_user: User = Depends(get_current_user),
-):
-    await InsightService(db).delete_insight(insight_id, current_user.id)
-    return {"status": "deleted", "insight_id": insight_id}
-
+    
+    

@@ -13,6 +13,8 @@ from app.models.image import Image
 from app.models.onboarding import OnboardingSession
 from app.models.subscription import Subscription, SubscriptionStatus
 from app.schemas.domain import DomainAnswerCreate, DomainFlowOut, DomainProgressOut, DomainQuestionOut
+from app.schemas.insight import InsightCreate
+from app.services.insight_service import InsightService
 
 from app.ai.skin_care.processor import analyze_skincare
 from app.ai.skin_care.config import SkincareAIConfig
@@ -39,7 +41,7 @@ AI_CONFIGS = {
     "diet":      DietAIConfig(),
     "height":    HeightAIConfig(),
     "workout":   WorkoutAIConfig(),
-    "quit porn": QuitPornAIConfig(),
+    "quit_porn": QuitPornAIConfig(),
     "fashion":   FashionAIConfig(),
 }
 
@@ -50,7 +52,7 @@ AI_PROCESSORS = {
     "diet":      analyze_diet,
     "height":    analyze_height,
     "workout":   analyze_workout,
-    "quit porn": analyze_quit_porn,
+    "quit_porn": analyze_quit_porn,
     "fashion":   analyze_fashion,
 }
 
@@ -152,9 +154,9 @@ class DomainService:
         return [
             {
                 "question_id": question.id,
-                "question": question.question,
-                "answer": answer.answer,
-                "answered_at": answer.completed_at
+                "question":    question.question,
+                "answer":      answer.answer,
+                "answered_at": answer.completed_at,
             }
             for answer, question in result.all()
         ]
@@ -216,6 +218,17 @@ class DomainService:
 
         return await self._process_ai_completion(user_id, domain)
 
+    _DOMAIN_ICONS: dict[str, str] = {
+        "skincare":  "https://api.lookslabai.com/static/icons/SkinCare.jpg",
+        "haircare":  "https://api.lookslabai.com/static/icons/Hair.png",
+        "workout":   "https://api.lookslabai.com/static/icons/Workout.jpg",
+        "diet":      "https://api.lookslabai.com/static/icons/Diet.jpg",
+        "facial":    "https://api.lookslabai.com/static/icons/Facial.jpg",
+        "fashion":   "https://api.lookslabai.com/static/icons/Fashion.png",
+        "height":    "https://api.lookslabai.com/static/icons/Height.jpg",
+        "quit_porn": "https://api.lookslabai.com/static/icons/QuitPorn.jpg",
+    }
+
     async def get_all_domains_progress(self, user_id: int) -> dict[str, Any]:
         progress_overview = []
 
@@ -223,32 +236,34 @@ class DomainService:
             try:
                 progress = await self.calculate_progress(domain, user_id)
                 progress_overview.append({
-                    "domain": domain,
-                    "progress_percent": round(progress.progress_percent, 1),
+                    "domain":             domain,
+                    "icon_url":           self._DOMAIN_ICONS.get(domain),
+                    "progress_percent":   round(progress.progress_percent, 1),
                     "answered_questions": len(progress.answered_questions),
-                    "total_questions": progress.total_questions,
-                    "is_completed": progress.progress.get("completed", False)
+                    "total_questions":    progress.total_questions,
+                    "is_completed":       progress.progress.get("completed", False),
                 })
             except Exception as e:
                 if not isinstance(e, HTTPException):
                     logger.error(f"Error getting progress for domain {domain}, user {user_id}: {e}", exc_info=settings.is_development)
                 progress_overview.append({
-                    "domain": domain,
-                    "progress_percent": 0.0,
+                    "domain":             domain,
+                    "icon_url":           self._DOMAIN_ICONS.get(domain),
+                    "progress_percent":   0.0,
                     "answered_questions": 0,
-                    "total_questions": 0,
-                    "is_completed": False
+                    "total_questions":    0,
+                    "is_completed":       False,
                 })
 
         average = sum(d["progress_percent"] for d in progress_overview) / len(progress_overview) if progress_overview else 0.0
 
         return {
-            "user_id": user_id,
-            "domains": progress_overview,
-            "overall_average": round(average, 2),
-            "domains_started": sum(1 for d in progress_overview if d["progress_percent"] > 0),
+            "user_id":           user_id,
+            "domains":           progress_overview,
+            "overall_average":   round(average, 2),
+            "domains_started":   sum(1 for d in progress_overview if d["progress_percent"] > 0),
             "domains_completed": sum(1 for d in progress_overview if d["is_completed"]),
-            "total_domains": len(progress_overview)
+            "total_domains":     len(progress_overview),
         }
 
     async def _get_answers_with_context(self, domain: str, user_id: int) -> list[dict]:
@@ -273,6 +288,50 @@ class DomainService:
             logger.warning(f"Could not fetch images for {domain} (user {user_id}): {e}")
             return []
 
+    def _extract_score(self, domain: str, ai_output: dict) -> Optional[float]:
+        """
+        Extract a 0-100 score from AI output.
+        Each domain AI processor returns different fields so we check the most
+        meaningful score field per domain.
+        """
+        if not ai_output:
+            return None
+
+        score_field_map = {
+            "skincare":  "health_score",
+            "haircare":  "health_score",
+            "facial":    "health_score",
+            "diet":      "health_score",
+            "height":    "health_score",
+            "workout":   "health_score",
+            "quit_porn": "health_score",
+            "fashion":   "health_score",
+        }
+
+        # Try domain-specific score field first
+        field = score_field_map.get(domain, "health_score")
+        score = ai_output.get(field)
+
+        # Fall back to checking nested health dict
+        if score is None:
+            health = ai_output.get("health", {})
+            if isinstance(health, dict):
+                score = health.get("score") or health.get("health_score") or health.get("overall_score")
+
+        # Fall back to attributes dict
+        if score is None:
+            attributes = ai_output.get("attributes", {})
+            if isinstance(attributes, dict):
+                score = attributes.get("overall_score") or attributes.get("score")
+
+        if score is not None:
+            try:
+                return min(max(float(score), 0.0), 100.0)
+            except (TypeError, ValueError):
+                return None
+
+        return None
+
     async def _process_ai_completion(self, user_id: int, domain: str) -> DomainFlowOut:
         progress = await self.calculate_progress(domain, user_id)
         answers_ctx = await self._get_answers_with_context(domain, user_id)
@@ -293,6 +352,20 @@ class DomainService:
                     logger.info(f"AI processing complete for {domain} (user {user_id})")
                 except Exception as e:
                     logger.error(f"AI processing failed for {domain} (user {user_id}): {e}", exc_info=settings.is_development)
+
+        # Save AI output to insights table
+        if ai_output:
+            try:
+                score = self._extract_score(domain, ai_output)
+                await InsightService(self.db).create_or_update_insight(InsightCreate(
+                    user_id=user_id,
+                    category=domain,
+                    content=ai_output,
+                    source="ai",
+                    score=score,
+                ))
+            except Exception as e:
+                logger.error(f"Failed to save insight for {domain} (user {user_id}): {e}", exc_info=settings.is_development)
 
         def _get(key: str) -> Optional[Any]:
             return ai_output.get(key) if ai_output else None
@@ -318,4 +391,5 @@ class DomainService:
             ai_recovery=_get("recovery_path"),
             ai_features=_get("feature_scores"),
         )
-
+        
+        

@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,7 +9,6 @@ from app.schemas.subscription import (
     SubscriptionInterval,
     SubscriptionOut,
     SubscriptionPlanOut,
-    SubscriptionStatusResponse,
     PlanType,
 )
 from app.services.subscription_service import SubscriptionService
@@ -74,12 +73,3 @@ async def get_my_subscription(
     current_user: User = Depends(get_current_user),
 ):
     return await SubscriptionService(db).get_user_subscription(current_user.id)
-
-
-@router.get("/me/status", response_model=SubscriptionStatusResponse)
-async def check_subscription_status(
-    db: AsyncSession = Depends(get_async_db),
-    current_user: User = Depends(get_current_user),
-):
-    return await SubscriptionService(db).get_subscription_status(current_user.id)
-

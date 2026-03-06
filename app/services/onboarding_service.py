@@ -145,6 +145,13 @@ class OnboardingService:
 
         return OnboardingAnswersResponse(user_id=user_id, answers=answers)
 
+    _WELLNESS_ICONS = {
+        "height":       "https://api.lookslabai.com/static/icons/WellnessHeight.png",
+        "weight":       "https://api.lookslabai.com/static/icons/WellnessWeight.png",
+        "sleep_hours":  "https://api.lookslabai.com/static/icons/WellnessSleep.png",
+        "water_intake": "https://api.lookslabai.com/static/icons/WellnessWater.png",
+    }
+
     async def get_wellness_metrics(self, user_id: int) -> WellnessMetricsOut:
         result = await self.db.execute(
             select(OnboardingSession)
@@ -153,32 +160,30 @@ class OnboardingService:
         )
         session = result.scalar_one_or_none()
 
-        if not session:
-            return WellnessMetricsOut(daily_quote=get_daily_quote())
-
-        result = await self.db.execute(
-            select(OnboardingAnswer, OnboardingQuestion)
-            .join(OnboardingQuestion, OnboardingAnswer.question_id == OnboardingQuestion.id)
-            .where(OnboardingAnswer.session_id == session.id)
-        )
-
         metrics: dict[str, Any] = {}
-        for answer, question in result.all():
-            q_lower = question.question.lower()
-            if "height" in q_lower:
-                metrics["height"] = answer.answer
-            elif "weight" in q_lower:
-                metrics["weight"] = answer.answer
-            elif "sleep" in q_lower:
-                metrics["sleep_hours"] = answer.answer
-            elif "water" in q_lower:
-                metrics["water_intake"] = answer.answer
+        if session:
+            result = await self.db.execute(
+                select(OnboardingAnswer, OnboardingQuestion)
+                .join(OnboardingQuestion, OnboardingAnswer.question_id == OnboardingQuestion.id)
+                .where(OnboardingAnswer.session_id == session.id)
+            )
+            for answer, question in result.all():
+                q_lower = question.question.lower()
+                if "height" in q_lower:
+                    metrics["height"] = answer.answer
+                elif "weight" in q_lower:
+                    metrics["weight"] = answer.answer
+                elif "sleep" in q_lower:
+                    metrics["sleep_hours"] = answer.answer
+                elif "water" in q_lower:
+                    metrics["water_intake"] = answer.answer
 
         return WellnessMetricsOut(
-            height=metrics.get("height"),
-            weight=metrics.get("weight"),
-            sleep_hours=metrics.get("sleep_hours"),
-            water_intake=metrics.get("water_intake"),
+            height={"value": metrics.get("height"), "icon_url": self._WELLNESS_ICONS["height"]},
+            weight={"value": metrics.get("weight"), "icon_url": self._WELLNESS_ICONS["weight"]},
+            sleep_hours={"value": metrics.get("sleep_hours"), "icon_url": self._WELLNESS_ICONS["sleep_hours"]},
+            water_intake={"value": metrics.get("water_intake"), "icon_url": self._WELLNESS_ICONS["water_intake"]},
             daily_quote=get_daily_quote()
         )
-
+        
+        

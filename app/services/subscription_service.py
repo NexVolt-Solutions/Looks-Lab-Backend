@@ -79,8 +79,10 @@ class SubscriptionService:
         if subscription.status == SubscriptionStatus.expired:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot cancel an expired subscription")
 
+        now = datetime.now(timezone.utc)
         subscription.status = SubscriptionStatus.cancelled
-        subscription.updated_at = datetime.now(timezone.utc)
+        subscription.cancelled_at = now
+        subscription.updated_at = now
         await self.db.commit()
         await self.db.refresh(subscription)
         logger.info(f"Cancelled subscription {subscription_id} for user {user_id}")
@@ -102,28 +104,6 @@ class SubscriptionService:
         await self.db.refresh(subscription)
         logger.info(f"Reactivated subscription {subscription_id} for user {user_id}")
         return subscription
-
-    async def get_subscription_status(self, user_id: int) -> dict:
-        subscription = await self.get_user_subscription(user_id, raise_if_not_found=False)
-
-        if not subscription:
-            return {
-                "has_subscription": False,
-                "status": None,
-                "plan": None,
-                "access_granted": False,
-                "end_date": None,
-                "message": "No subscription found",
-            }
-
-        return {
-            "has_subscription": True,
-            "status": subscription.status,
-            "plan": subscription.plan,
-            "access_granted": subscription.status == SubscriptionStatus.active,
-            "end_date": subscription.end_date,
-            "message": self._get_status_message(subscription),
-        }
 
     async def check_active_subscription(self, user_id: int) -> bool:
         subscription = await self._get_active_subscription(user_id)
@@ -156,11 +136,5 @@ class SubscriptionService:
         subscription.updated_at = datetime.now(timezone.utc)
         await self.db.commit()
         logger.info(f"Auto-expired subscription {subscription.id} for user {subscription.user_id}")
-
-    def _get_status_message(self, subscription: Subscription) -> str:
-        return {
-            SubscriptionStatus.active: f"Active {subscription.plan} subscription",
-            SubscriptionStatus.cancelled: "Subscription has been cancelled",
-            SubscriptionStatus.expired: "Subscription has expired",
-        }.get(subscription.status, "Subscription is pending")
-
+        
+        

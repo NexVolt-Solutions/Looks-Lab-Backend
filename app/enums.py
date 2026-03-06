@@ -13,7 +13,7 @@ class DomainEnum(str, enum.Enum):
     WORKOUT   = "workout"
     DIET      = "diet"
     HEIGHT    = "height"
-    QUIT_PORN = "quit porn"
+    QUIT_PORN = "quit_porn"
     FACIAL    = "facial"
 
     @classmethod

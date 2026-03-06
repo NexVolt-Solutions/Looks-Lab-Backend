@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Any, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from app.models.image import ImageStatus, ImageType
 
 
@@ -26,7 +26,22 @@ class ImageUpdate(BaseModel):
     view: Optional[str] = None
 
 
+class SimpleImageOut(BaseModel):
+    """Response for simple image uploads — no domain/view/analysis metadata."""
+    id: int
+    user_id: int
+    url: Optional[str] = None
+    mime_type: Optional[str] = None
+    file_size: Optional[int] = None
+    image_type: ImageType
+    uploaded_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
 class ImageOut(BaseModel):
+    """Full response for domain image uploads — includes all metadata."""
     id: int
     user_id: int
     file_path: Optional[str] = None
@@ -45,10 +60,5 @@ class ImageOut(BaseModel):
     updated_at: datetime
 
     model_config = {"from_attributes": True}
-
-
-class ImageUrlOut(BaseModel):
-    image_id: int
-    url: str
-    expires_in: int = Field(..., ge=60, le=86400)
-
+    
+    

@@ -14,7 +14,6 @@ from app.schemas.domain import (
     DomainAnswerCreate,
     DomainAnswersOut,
     DomainFlowOut,
-    DomainProgressOut,
     DomainQuestionOut,
     AllDomainsProgressOut,
     FoodAnalysisOut,
@@ -90,11 +89,11 @@ async def get_barcode_info(
             "portion_size": product.get("serving_size", "100g"),
             "nutrition": {
                 "calories": round(nutrients.get("energy-kcal_100g", 0), 1),
-                "protein": round(nutrients.get("proteins_100g", 0), 1),
-                "carbs": round(nutrients.get("carbohydrates_100g", 0), 1),
-                "fat": round(nutrients.get("fat_100g", 0), 1),
-                "fiber": round(nutrients.get("fiber_100g", 0), 1),
-                "sugar": round(nutrients.get("sugars_100g", 0), 1),
+                "protein":  round(nutrients.get("proteins_100g", 0), 1),
+                "carbs":    round(nutrients.get("carbohydrates_100g", 0), 1),
+                "fat":      round(nutrients.get("fat_100g", 0), 1),
+                "fiber":    round(nutrients.get("fiber_100g", 0), 1),
+                "sugar":    round(nutrients.get("sugars_100g", 0), 1),
             },
             "image_url": product.get("image_url"),
             "tip": "Nutrition values are per 100g unless portion size is specified."
@@ -117,6 +116,15 @@ async def get_all_domains_progress(
     current_user: User = Depends(get_current_user),
 ):
     return await DomainService(db).get_all_domains_progress(current_user.id)
+
+
+@router.get("/explore")
+@limiter.limit(RateLimits.DEFAULT)
+async def get_explore_domains(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+):
+    return {"domains": _EXPLORE_DOMAINS}
 
 
 @router.get("/{domain}/questions", response_model=list[DomainQuestionOut])
@@ -177,19 +185,6 @@ async def get_domain_answers(
     return {"user_id": current_user.id, "domain": domain, "answers": answers}
 
 
-@router.get("/{domain}/progress", response_model=DomainProgressOut)
-@limiter.limit(RateLimits.DEFAULT)
-async def get_domain_progress(
-    request: Request,
-    domain: str,
-    db: AsyncSession = Depends(get_async_db),
-    current_user: User = Depends(get_current_user),
-):
-    service = DomainService(db)
-    validate_domain(domain)
-    return await service.calculate_progress(domain, current_user.id)
-
-
 @router.post("/{domain}/retry-ai", response_model=DomainFlowOut)
 @limiter.limit(RateLimits.AI)
 async def retry_ai_processing(
@@ -204,19 +199,14 @@ async def retry_ai_processing(
     return await service.next_or_complete(current_user.id, domain)
 
 
-@router.get("/{domain}/access")
-@limiter.limit(RateLimits.DEFAULT)
-async def check_domain_access(
-    request: Request,
-    domain: str,
-    db: AsyncSession = Depends(get_async_db),
-    current_user: User = Depends(get_current_user),
-):
-    service = DomainService(db)
-    try:
-        validate_domain(domain)
-        await service.check_domain_access(current_user.id, domain)
-        return {"has_access": True, "domain": domain, "user_id": current_user.id, "message": "Access granted"}
-    except HTTPException as e:
-        return {"has_access": False, "domain": domain, "user_id": current_user.id, "message": e.detail}
+_EXPLORE_DOMAINS = [
+    {"key": "skincare",  "name": "Skincare",   "subtitle": "Daily glow routine",    "icon_url": "https://api.lookslabai.com/static/icons/SkinCare.jpg"},
+    {"key": "haircare",  "name": "Hair",        "subtitle": "Boost hair health",     "icon_url": "https://api.lookslabai.com/static/icons/Hair.png"},
+    {"key": "workout",   "name": "Workout",     "subtitle": "Build strength daily",  "icon_url": "https://api.lookslabai.com/static/icons/Workout.jpg"},
+    {"key": "diet",      "name": "Diet",        "subtitle": "Eat smart, feel great", "icon_url": "https://api.lookslabai.com/static/icons/Diet.jpg"},
+    {"key": "facial",    "name": "Facial",      "subtitle": "Define your features",  "icon_url": "https://api.lookslabai.com/static/icons/Facial.jpg"},
+    {"key": "fashion",   "name": "Fashion",     "subtitle": "Own your style",        "icon_url": "https://api.lookslabai.com/static/icons/Fashion.png"},
+    {"key": "height",    "name": "Height",      "subtitle": "Improve your posture",  "icon_url": "https://api.lookslabai.com/static/icons/Height.jpg"},
+    {"key": "quit_porn", "name": "Quit Porn",   "subtitle": "Reclaim your focus",    "icon_url": "https://api.lookslabai.com/static/icons/QuitPorn.jpg"},
+]
 
