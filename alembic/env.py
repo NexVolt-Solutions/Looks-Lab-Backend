@@ -17,6 +17,7 @@ from app.models.image import Image  # noqa: F401
 from app.models.insight import Insight  # noqa: F401
 from app.models.subscription import Subscription  # noqa: F401
 from app.models.refresh_token import RefreshToken  # noqa: F401
+from app.models.domain_score_history import DomainScoreHistory  # noqa: F401
 
 config = context.config
 

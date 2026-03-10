@@ -15,6 +15,7 @@ from app.models.subscription import Subscription, SubscriptionStatus
 from app.schemas.domain import DomainAnswerCreate, DomainFlowOut, DomainProgressOut, DomainQuestionOut
 from app.schemas.insight import InsightCreate
 from app.services.insight_service import InsightService
+from app.services.progress_service import ProgressService
 
 from app.ai.skin_care.processor import analyze_skincare
 from app.ai.skin_care.config import SkincareAIConfig
@@ -63,10 +64,22 @@ class DomainService:
         self.db = db
 
     async def check_domain_access(self, user_id: int, domain: str) -> None:
-        result = await self.db.execute(
-            select(OnboardingSession).where(OnboardingSession.user_id == user_id)
+        # TESTING MODE: bypass all subscription/domain checks
+        # Set BYPASS_SUBSCRIPTION_CHECK=false in .env.production before going live
+        if settings.BYPASS_SUBSCRIPTION_CHECK:
+            logger.debug(f"Subscription check bypassed for user {user_id} domain {domain}")
+            return
+
+        session_result = await self.db.execute(
+            select(OnboardingSession)
+            .where(
+                OnboardingSession.user_id == user_id,
+                OnboardingSession.is_completed == True,  # noqa: E712
+            )
+            .order_by(OnboardingSession.created_at.desc())
+            .limit(1)
         )
-        session = result.scalar_one_or_none()
+        session = session_result.scalars().first()
 
         if not session:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No onboarding session found")
@@ -80,8 +93,11 @@ class DomainService:
         if not session.is_paid:
             raise HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED, detail="Payment required for domain access")
 
-        result = await self.db.execute(select(Subscription).where(Subscription.user_id == user_id))
-        subscription = result.scalar_one_or_none()
+        sub_result = await self.db.execute(
+            select(Subscription).where(Subscription.user_id == user_id)
+            .order_by(Subscription.created_at.desc()).limit(1)
+        )
+        subscription = sub_result.scalars().first()
 
         if not subscription:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No active subscription found")
@@ -175,8 +191,11 @@ class DomainService:
         total = len(questions)
         answered = len(answered_ids)
 
-        result = await self.db.execute(select(Subscription).where(Subscription.user_id == user_id))
-        subscription = result.scalar_one_or_none()
+        sub_result2 = await self.db.execute(
+            select(Subscription).where(Subscription.user_id == user_id)
+            .order_by(Subscription.created_at.desc()).limit(1)
+        )
+        subscription = sub_result2.scalars().first()
         subscription_status = None
 
         if subscription:
@@ -289,11 +308,6 @@ class DomainService:
             return []
 
     def _extract_score(self, domain: str, ai_output: dict) -> Optional[float]:
-        """
-        Extract a 0-100 score from AI output.
-        Each domain AI processor returns different fields so we check the most
-        meaningful score field per domain.
-        """
         if not ai_output:
             return None
 
@@ -308,17 +322,14 @@ class DomainService:
             "fashion":   "health_score",
         }
 
-        # Try domain-specific score field first
         field = score_field_map.get(domain, "health_score")
         score = ai_output.get(field)
 
-        # Fall back to checking nested health dict
         if score is None:
             health = ai_output.get("health", {})
             if isinstance(health, dict):
                 score = health.get("score") or health.get("health_score") or health.get("overall_score")
 
-        # Fall back to attributes dict
         if score is None:
             attributes = ai_output.get("attributes", {})
             if isinstance(attributes, dict):
@@ -353,10 +364,12 @@ class DomainService:
                 except Exception as e:
                     logger.error(f"AI processing failed for {domain} (user {user_id}): {e}", exc_info=settings.is_development)
 
-        # Save AI output to insights table
+        # Save AI output to insights + score history
         if ai_output:
+            score = self._extract_score(domain, ai_output)
+
+            # Save insight
             try:
-                score = self._extract_score(domain, ai_output)
                 await InsightService(self.db).create_or_update_insight(InsightCreate(
                     user_id=user_id,
                     category=domain,
@@ -366,6 +379,13 @@ class DomainService:
                 ))
             except Exception as e:
                 logger.error(f"Failed to save insight for {domain} (user {user_id}): {e}", exc_info=settings.is_development)
+
+            
+            if score is not None:
+                try:
+                    await ProgressService(self.db).save_score_snapshot(user_id, domain, score)
+                except Exception as e:
+                    logger.error(f"Failed to save score snapshot for {domain} (user {user_id}): {e}", exc_info=settings.is_development)
 
         def _get(key: str) -> Optional[Any]:
             return ai_output.get(key) if ai_output else None

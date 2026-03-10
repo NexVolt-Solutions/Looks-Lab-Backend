@@ -22,7 +22,7 @@ async def generate_workout_plan(
     current_user: User = Depends(get_current_user),
 ):
     try:
-        answers = await OnboardingService(db).get_user_answers_with_questions(current_user.id)
+        onboarding = await OnboardingService(db).get_user_answers_with_questions(current_user.id)
 
         user_data = {
             "age": current_user.age,
@@ -33,16 +33,16 @@ async def generate_workout_plan(
             "goals": "General fitness",
         }
 
-        for answer in answers.get("answers", []):
-            question_lower = answer["question"].lower()
+        for answer in onboarding.answers:  # .answers is a list of OnboardingAnswerWithQuestion
+            question_lower = answer.question.lower()
             if "fitness level" in question_lower or "experience" in question_lower:
-                user_data["fitness_level"] = str(answer["answer"])
+                user_data["fitness_level"] = str(answer.answer)
             elif "workout" in question_lower and "frequency" in question_lower:
-                user_data["workout_frequency"] = str(answer["answer"])
+                user_data["workout_frequency"] = str(answer.answer)
             elif "equipment" in question_lower:
-                user_data["equipment"] = str(answer["answer"])
+                user_data["equipment"] = str(answer.answer)
             elif "goal" in question_lower:
-                user_data["goals"] = str(answer["answer"])
+                user_data["goals"] = str(answer.answer)
 
         workout_plan = WorkoutAIService.generate_workout_plan(
             focus=payload.focus,
@@ -51,7 +51,10 @@ async def generate_workout_plan(
             duration_minutes=payload.duration_minutes,
         )
 
-        logger.info(f"Generated workout plan for user {current_user.id}: focus={payload.focus.value}, duration={payload.duration_minutes}min")
+        logger.info(
+            f"Generated workout plan for user {current_user.id}: "
+            f"focus={payload.focus.value}, duration={payload.duration_minutes}min"
+        )
         return workout_plan
 
     except ValueError as e:
@@ -60,4 +63,5 @@ async def generate_workout_plan(
     except Exception as e:
         logger.error(f"Unexpected error generating workout plan: {e}", exc_info=True)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to generate workout plan. Please try again.")
-
+        
+        

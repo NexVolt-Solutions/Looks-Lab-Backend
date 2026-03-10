@@ -66,6 +66,10 @@ class Settings(BaseSettings):
 
     RATE_LIMIT_PER_MINUTE: int = 60
 
+    # Testing flag — set to true to bypass subscription/domain checks
+    # Set to false or remove before going live
+    BYPASS_SUBSCRIPTION_CHECK: bool = False
+
     @property
     def is_production(self) -> bool:
         return self.ENV.lower() in ("production", "prod")

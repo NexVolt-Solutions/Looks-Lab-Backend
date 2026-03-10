@@ -6,7 +6,7 @@
       { "question": "How does your scalp usually feel?", "type": "choice", "options": ["Oily", "Normal", "Dry / flaky", "Sensitive"] },
       { "question": "What worries you most about your hair?", "type": "multi_choice", "options": ["Hair fall / shedding", "Receding hairline", "Thinning / low volume", "Frizz / dryness", "Dullness / lack of shine"] },
       { "question": "How often do you wash your hair?", "type": "choice", "options": ["Daily", "Every other day", "Once a week", "Once a month"] },
-      { "question": "How often do you use heat styling, blow drying, or chemical treatments?", "type": "choice", "options": ["Daily / very frequent", "Occasionally (1–2 times/week)", "Rarely or never"] },
+      { "question": "How often do you use heat styling, blow drying, or chemical treatments?", "type": "choice", "options": ["Daily / very frequent", "Occasionally (1-2 times/week)", "Rarely or never"] },
       { "question": "Is there a history of hair thinning or hair loss in your family?", "type": "choice", "options": ["Yes, father's side", "Yes, mother's side", "Yes, both sides", "No"] },
       { "question": "What are your main hair goals?", "type": "multi_choice", "options": ["Reduce hair fall / strengthen", "Improve shine / smoothness", "Increase thickness / volume", "Improve scalp health", "Slow genetic hair thinning"] }
     ],
@@ -22,7 +22,7 @@
       { "question": "What are your main skin goals?", "type": "multi_choice", "options": ["Reduce acne / pimples / breakouts", "Reduce dark spots / hyperpigmentation", "Even skin tone / reduce redness", "Increase radiance / glow", "Reduce fine lines / wrinkles", "Hydrate & improve skin texture", "Reduce oiliness / balance skin", "Reduce dullness / fatigue signs", "Improve overall skin health"] }
     ],
     "height": [
-      { "question": "How often do you exercise or stay active?", "type": "choice", "options": ["Daily", "3–4 times/week", "Rarely"] },
+      { "question": "How often do you exercise or stay active?", "type": "choice", "options": ["Daily", "3-4 times/week", "Rarely"] },
       { "question": "How balanced is your diet?", "type": "choice", "options": ["Poor (low protein, few nutrients)", "Average", "Excellent (high protein, balanced nutrition)"] },
       { "question": "Do you do stretching exercises or sports that promote height?", "type": "choice", "options": ["Yes, regularly", "Occasionally", "No"] },
       { "question": "Did your parents or siblings reach their full adult height?", "type": "choice", "options": ["Father yes", "Mother yes", "Both yes", "Not sure"] },
@@ -34,19 +34,18 @@
       { "question": "What is your body type?", "type": "choice", "options": ["Ectomorph (thin, hard to gain weight)", "Mesomorph (athletic, muscular)", "Endomorph (tends to gain fat easily)", "Mixed / unsure"] },
       { "question": "What is your main workout goal?", "type": "multi_choice", "options": ["Build muscle / strength", "Lose fat / lean out", "Improve endurance / stamina", "Improve flexibility / posture", "Overall health & fitness"] },
       { "question": "Target weight / physique goal", "type": "numeric" },
-      { "question": "How many days per week do you currently exercise?", "type": "choice", "options": ["2–3", "4–5", "6–7"] },
+      { "question": "How many days per week do you currently exercise?", "type": "choice", "options": ["2-3", "4-5", "6-7"] },
       { "question": "Preferred type of workouts", "type": "multi_choice", "options": ["Gym / strength training", "Home workouts", "Yoga / Stretching", "Sports"] },
       { "question": "Workout experience level", "type": "choice", "options": ["Beginner", "Intermediate", "Advanced"] },
-      { "question": "Preferred workout duration", "type": "choice", "options": ["<30 minutes", "30–60 minutes", "60+ minutes"] }
+      { "question": "Preferred workout duration", "type": "choice", "options": ["<30 minutes", "30-60 minutes", "60+ minutes"] }
     ],
     "diet": [
-      { "question": "How many meals do you usually have per day?", "type": "choice", "options": ["1–2", "3", "4–5"] },
+      { "question": "How many meals do you usually have per day?", "type": "choice", "options": ["1-2", "3", "4-5"] },
       { "question": "Do you track calories or macros?", "type": "choice", "options": ["Yes, regularly", "Sometimes", "No"] },
       { "question": "Diet type preference", "type": "choice", "options": ["Omnivore", "Vegetarian", "Vegan", "Other / Flexible"] },
       { "question": "Do you consume sugar-sweetened beverages?", "type": "choice", "options": ["Yes, frequently", "Occasionally", "Rarely / never"] },
       { "question": "Do you consume supplements?", "type": "multi_choice", "options": ["Protein / whey", "Vitamins / minerals", "Pre-workout / fat burners", "None"] },
-      { "question": "What are your cooking preferences?", "type": "choice", "options": ["Home-cooked meals", "Simple quick meals", "Don't cook / rely on ready meals"] },
-      { "question": "What weight would you like to achieve?", "type": "numeric" }
+      { "question": "What are your cooking preferences?", "type": "choice", "options": ["Home-cooked meals", "Simple quick meals", "Don't cook / rely on ready meals"] }
     ],
     "fashion": [
       { "question": "What is your body type?", "type": "choice", "options": ["Ectomorph / Slim", "Mesomorph / Athletic", "Endomorph / Curvy / Stocky", "Mixed / unsure"] },
@@ -54,14 +53,14 @@
       { "question": "Do you prefer fitted or loose clothing?", "type": "choice", "options": ["Fitted / tailored", "Loose / relaxed", "Combination"] },
       { "question": "Do you prefer seasonal / climate-based outfit suggestions?", "type": "choice", "options": ["Yes, always", "Occasionally", "No"] },
       { "question": "Do you like to follow fashion trends?", "type": "choice", "options": ["Yes, always", "Sometimes", "No, prefer classic styles"] },
-      { "question": "Do you wear accessories regularly?", "type": "choice", "options": ["Yes", "Occasionally", "No"] },
+      { "question": "Do you wear accessories regularly? (watches, jewelry, hats, etc)", "type": "choice", "options": ["Yes", "Occasionally", "No"] },
       { "question": "How often do you attend events that require styling?", "type": "choice", "options": ["Daily / work / meetings", "Weekly / casual events", "Rarely"] },
       { "question": "What is your main goal with fashion / styling?", "type": "multi_choice", "options": ["Improve overall appearance", "Build a versatile wardrobe", "Match colors and accessories", "Follow fashion trends", "Boost confidence"] }
     ],
     "facial": [
       { "question": "What areas do you want to improve?", "type": "multi_choice", "options": ["Jawline / chin", "Hollow Cheeks", "Forward jaw projection", "Overall symmetry"] },
-      { "question": "Do you want to enhance facial aesthetics naturally?", "type": "choice", "options": ["Yes", "No"] },
-      { "question": "Do you exercise your face regularly?", "type": "choice", "options": ["Yes", "Occasionally", "No"] },
+      { "question": "Do you want to enhance facial aesthetics naturally (non surgical)?", "type": "choice", "options": ["Yes", "No"] },
+      { "question": "Do you exercise your face regularly (Facial exercises / Massages)?", "type": "choice", "options": ["Yes", "Occasionally", "No"] },
       { "question": "Do you sleep on your back or side?", "type": "choice", "options": ["Back (better for facial symmetry)", "Side / stomach", "Mixed"] },
       { "question": "Do you feel your face is symmetrical?", "type": "choice", "options": ["Yes, mostly", "Slightly asymmetrical", "No, noticeably asymmetrical"] },
       { "question": "Do you grind your teeth or clench your jaw often?", "type": "choice", "options": ["Yes, frequently", "Occasionally", "No"] },

@@ -26,7 +26,10 @@ class AuthService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def get_or_create_user(self, email: str, provider: AuthProviderEnum, payload: dict) -> User:
+    async def get_or_create_user(
+        self, email: str, provider: AuthProviderEnum, payload: dict
+    ) -> tuple[User, bool]:
+        """Returns (user, is_new_user)"""
         email = email.lower().strip()
 
         result = await self.db.execute(select(User).where(User.email == email))
@@ -42,11 +45,11 @@ class AuthService:
         if not user:
             user = await self._create_new_user(email, provider, payload)
             logger.info(f"Created new user: {email} via {provider}")
+            return user, True
         else:
             user = await self._update_existing_user(user, provider, payload)
             logger.info(f"Updated existing user: {email} via {provider}")
-
-        return user
+            return user, False
 
     async def _create_new_user(self, email: str, provider: AuthProviderEnum, payload: dict) -> User:
         user = User(
@@ -111,7 +114,9 @@ class AuthService:
         except Exception as e:
             logger.error(f"Failed to update last_login for user {user_id}: {e}")
 
-    async def issue_tokens(self, user: User, device_info: Optional[str] = None) -> TokenResponse:
+    async def issue_tokens(
+        self, user: User, is_new_user: bool = False, device_info: Optional[str] = None
+    ) -> TokenResponse:
         access_token = create_access_token({
             "user_id": str(user.id),
             "email": user.email,
@@ -152,6 +157,7 @@ class AuthService:
             refresh_token=refresh_value,
             token_type="bearer",
             expires_in=settings.JWT_EXPIRATION_MINUTES * 60,
+            is_new_user=is_new_user,
         )
 
     async def validate_refresh_token(self, refresh_token: str) -> User:
@@ -190,4 +196,5 @@ class AuthService:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to revoke token")
 
         logger.info(f"Revoked refresh token for user {token_record.user_id}")
-
+        
+        

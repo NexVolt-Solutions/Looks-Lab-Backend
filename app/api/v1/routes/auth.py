@@ -38,7 +38,7 @@ async def google_sign_in(
             raise HTTPException(status_code=400, detail="Google token missing email")
 
         auth_service = AuthService(db)
-        user = await auth_service.get_or_create_user(
+        user, is_new_user = await auth_service.get_or_create_user(
             email=email,
             provider=AuthProviderEnum.GOOGLE,
             payload={
@@ -50,7 +50,7 @@ async def google_sign_in(
             }
         )
         await auth_service.update_last_login(user.id)
-        return await auth_service.issue_tokens(user)
+        return await auth_service.issue_tokens(user, is_new_user=is_new_user)
 
     except HTTPException:
         raise
@@ -74,7 +74,7 @@ async def apple_sign_in(
             raise HTTPException(status_code=400, detail="Apple token missing email")
 
         auth_service = AuthService(db)
-        user = await auth_service.get_or_create_user(
+        user, is_new_user = await auth_service.get_or_create_user(
             email=email,
             provider=AuthProviderEnum.APPLE,
             payload={
@@ -85,7 +85,7 @@ async def apple_sign_in(
             }
         )
         await auth_service.update_last_login(user.id)
-        return await auth_service.issue_tokens(user)
+        return await auth_service.issue_tokens(user, is_new_user=is_new_user)
 
     except HTTPException:
         raise
@@ -104,7 +104,7 @@ async def refresh_access_token(
     try:
         auth_service = AuthService(db)
         user = await auth_service.validate_refresh_token(body.refresh_token)
-        return await auth_service.issue_tokens(user)
+        return await auth_service.issue_tokens(user, is_new_user=False)
     except HTTPException:
         raise
     except Exception as e:
@@ -127,4 +127,5 @@ async def sign_out(
     except Exception as e:
         logger.error(f"Sign out failed: {e}", exc_info=settings.is_development)
         raise HTTPException(status_code=500, detail="Sign out failed")
-
+        
+        

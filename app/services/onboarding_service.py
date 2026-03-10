@@ -90,13 +90,13 @@ class OnboardingService:
         from app.models.user import User
         user = await self.db.get(User, user_id)
 
-        result = await self.db.execute(
+        answers_result = await self.db.execute(
             select(OnboardingAnswer, OnboardingQuestion)
             .join(OnboardingQuestion, OnboardingAnswer.question_id == OnboardingQuestion.id)
             .where(OnboardingAnswer.session_id == session.id)
         )
 
-        for answer, question in result.all():
+        for answer, question in answers_result.all():
             q_lower = question.question.lower()
             try:
                 if "name" in q_lower and not user.name:
@@ -114,36 +114,42 @@ class OnboardingService:
         logger.info(f"Linked session {session_id} to user {user_id}")
         return session
 
-    async def get_user_answers_with_questions(self, user_id: int) -> OnboardingAnswersResponse:
+    async def _get_all_completed_session_ids(self, user_id: int) -> list:
         result = await self.db.execute(
-            select(OnboardingSession)
-            .where(OnboardingSession.user_id == user_id)
-            .order_by(OnboardingSession.created_at.desc())
+            select(OnboardingSession.id)
+            .where(
+                OnboardingSession.user_id == user_id,
+                OnboardingSession.is_completed == True,  # noqa: E712
+            )
         )
-        session = result.scalar_one_or_none()
+        return [row[0] for row in result.all()]
 
-        if not session:
+    async def get_user_answers_with_questions(self, user_id: int) -> OnboardingAnswersResponse:
+        session_ids = await self._get_all_completed_session_ids(user_id)
+
+        if not session_ids:
             return OnboardingAnswersResponse(user_id=user_id, answers=[])
 
-        result = await self.db.execute(
+        answers_result = await self.db.execute(
             select(OnboardingAnswer, OnboardingQuestion)
             .join(OnboardingQuestion, OnboardingAnswer.question_id == OnboardingQuestion.id)
-            .where(OnboardingAnswer.session_id == session.id)
-            .order_by(OnboardingQuestion.id)
+            .where(OnboardingAnswer.session_id.in_(session_ids))
+            .order_by(OnboardingQuestion.id, OnboardingAnswer.created_at.desc())
         )
 
-        answers = [
-            OnboardingAnswerWithQuestion(
-                question_id=question.id,
-                question=question.question,
-                step=question.step,
-                answer=answer.answer,
-                answered_at=answer.created_at
-            )
-            for answer, question in result.all()
-        ]
+        # Deduplicate by question_id — keep the most recent answer
+        seen: dict[int, OnboardingAnswerWithQuestion] = {}
+        for answer, question in answers_result.all():
+            if question.id not in seen:
+                seen[question.id] = OnboardingAnswerWithQuestion(
+                    question_id=question.id,
+                    question=question.question,
+                    step=question.step,
+                    answer=answer.answer,
+                    answered_at=answer.created_at
+                )
 
-        return OnboardingAnswersResponse(user_id=user_id, answers=answers)
+        return OnboardingAnswersResponse(user_id=user_id, answers=list(seen.values()))
 
     _WELLNESS_ICONS = {
         "height":       "https://api.lookslabai.com/static/icons/WellnessHeight.png",
@@ -153,21 +159,17 @@ class OnboardingService:
     }
 
     async def get_wellness_metrics(self, user_id: int) -> WellnessMetricsOut:
-        result = await self.db.execute(
-            select(OnboardingSession)
-            .where(OnboardingSession.user_id == user_id)
-            .order_by(OnboardingSession.created_at.desc())
-        )
-        session = result.scalar_one_or_none()
+        session_ids = await self._get_all_completed_session_ids(user_id)
 
         metrics: dict[str, Any] = {}
-        if session:
-            result = await self.db.execute(
+        if session_ids:
+            answers_result = await self.db.execute(
                 select(OnboardingAnswer, OnboardingQuestion)
                 .join(OnboardingQuestion, OnboardingAnswer.question_id == OnboardingQuestion.id)
-                .where(OnboardingAnswer.session_id == session.id)
+                .where(OnboardingAnswer.session_id.in_(session_ids))
+                .order_by(OnboardingAnswer.created_at.asc())  # asc so latest overwrites
             )
-            for answer, question in result.all():
+            for answer, question in answers_result.all():
                 q_lower = question.question.lower()
                 if "height" in q_lower:
                     metrics["height"] = answer.answer
