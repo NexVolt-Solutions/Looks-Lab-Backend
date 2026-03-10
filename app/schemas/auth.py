@@ -23,10 +23,12 @@ class TokenResponse(BaseModel):
     refresh_token: str
     token_type: str = "bearer"
     expires_in: Optional[int] = None
+    is_new_user: bool = False 
 
     model_config = {"from_attributes": True}
 
 
 class SignOutResponse(BaseModel):
     detail: str
-
+    
+    
