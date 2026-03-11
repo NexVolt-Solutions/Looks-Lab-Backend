@@ -12,6 +12,7 @@ AnswerType = str | int | float | list[str] | dict[str, Any] | None
 class DomainQuestionOut(BaseModel):
     id: int
     domain: str
+    step: Optional[str] = None
     question: str
     type: QuestionType
     options: Optional[list[str]] = None
@@ -56,7 +57,7 @@ class DomainProgressOut(BaseModel):
 
 
 class DomainFlowOut(BaseModel):
-    status: str
+    status: str  # "ok" | "processing" | "completed"
     current: Optional[DomainQuestionOut] = None
     next: Optional[DomainQuestionOut] = None
     progress: DomainProgressOut

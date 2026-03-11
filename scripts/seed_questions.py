@@ -105,6 +105,7 @@ async def seed_domain_questions(session) -> None:
         for idx, q_data in enumerate(questions, start=1):
             session.add(DomainQuestion(
                 domain=domain,
+                step=q_data.get("step"),          
                 question=q_data["question"],
                 type=TYPE_MAP.get(q_data["type"], QuestionType.text),
                 options=q_data.get("options"),
