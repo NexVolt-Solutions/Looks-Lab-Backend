@@ -31,6 +31,7 @@ class DomainQuestion(Base):
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
 
     domain: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    step: Mapped[str | None] = mapped_column(String(50), nullable=True)
     question: Mapped[str] = mapped_column(String(255), nullable=False)
     type: Mapped[QuestionType] = mapped_column(String(20), nullable=False)
     options: Mapped[list[str] | None] = mapped_column(JSON)
@@ -65,4 +66,5 @@ class DomainAnswer(Base):
 
     question: Mapped[DomainQuestion] = relationship("DomainQuestion", back_populates="answers")
     user: Mapped[User] = relationship("User", back_populates="domain_answers")
-
+    
+    

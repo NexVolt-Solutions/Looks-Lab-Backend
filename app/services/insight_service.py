@@ -21,8 +21,10 @@ class InsightService:
                 Insight.user_id == payload.user_id,
                 Insight.category == payload.category,
             )
+            .order_by(Insight.created_at.desc())
+            .limit(1)
         )
-        existing = result.scalar_one_or_none()
+        existing = result.scalars().first()
 
         if existing:
             existing.content = payload.content
@@ -83,8 +85,10 @@ class InsightService:
                 Insight.user_id == user_id,
                 Insight.category == domain,
             )
+            .order_by(Insight.created_at.desc())
+            .limit(1)
         )
-        return result.scalar_one_or_none()
+        return result.scalars().first()
 
     async def mark_as_read(self, insight_id: int, user_id: int) -> Insight:
         insight = await self.get_insight(insight_id, user_id)
@@ -117,23 +121,21 @@ class InsightService:
         return insight
 
     async def get_weekly_scores(self, user_id: int) -> dict:
-        """
-        Returns weekly progress scores per domain.
-        Queries all insights for the user and returns score per domain.
-        Score comes from AI output saved when domain was completed.
-        """
-        today = datetime.now(timezone.utc).date()
-        monday = today - timedelta(days=today.weekday())
-        week_start = datetime.combine(monday, datetime.min.time()).replace(tzinfo=timezone.utc)
-
         result = await self.db.execute(
             select(Insight).where(Insight.user_id == user_id)
+            .order_by(Insight.created_at.desc())
         )
         insights = result.scalars().all()
 
-        domain_scores = {}
+        # Deduplicate — keep latest insight per domain
+        seen = {}
         for insight in insights:
             domain = str(insight.category)
+            if domain not in seen:
+                seen[domain] = insight
+
+        domain_scores = {}
+        for domain, insight in seen.items():
             score = insight.score or 0.0
             domain_scores[domain] = {
                 "domain": domain,

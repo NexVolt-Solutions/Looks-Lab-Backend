@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime, timezone
 from typing import Any, Optional
 
@@ -16,6 +17,7 @@ from app.schemas.domain import DomainAnswerCreate, DomainFlowOut, DomainProgress
 from app.schemas.insight import InsightCreate
 from app.services.insight_service import InsightService
 from app.services.progress_service import ProgressService
+from app.utils import ai_task_manager
 
 from app.ai.skin_care.processor import analyze_skincare
 from app.ai.skin_care.config import SkincareAIConfig
@@ -64,8 +66,6 @@ class DomainService:
         self.db = db
 
     async def check_domain_access(self, user_id: int, domain: str) -> None:
-        # TESTING MODE: bypass all subscription/domain checks
-        # Set BYPASS_SUBSCRIPTION_CHECK=false in .env.production before going live
         if settings.BYPASS_SUBSCRIPTION_CHECK:
             logger.debug(f"Subscription check bypassed for user {user_id} domain {domain}")
             return
@@ -225,6 +225,7 @@ class DomainService:
         )
         answered_ids = {qid for (qid,) in result.all()}
 
+        # Still has unanswered questions -> return next question
         for idx, q in enumerate(questions):
             if q.id not in answered_ids:
                 next_q = questions[idx + 1] if idx + 1 < len(questions) else None
@@ -235,7 +236,59 @@ class DomainService:
                     progress=await self.calculate_progress(domain, user_id),
                 )
 
-        return await self._process_ai_completion(user_id, domain)
+        # All questions answered -> check if AI already running
+        task = ai_task_manager.get_task(user_id, domain)
+
+        if task and task["status"] == "processing":
+            # AI is still running -> return processing immediately
+            logger.info(f"AI still processing for {domain} (user {user_id}) -- returning processing status")
+            return DomainFlowOut(
+                status="processing",
+                current=None,
+                next=None,
+                progress=await self.calculate_progress(domain, user_id),
+                redirect="processing",
+            )
+
+        if task and task["status"] == "completed":
+            # AI finished -> return cached result
+            logger.info(f"Returning cached AI result for {domain} (user {user_id})")
+            return task["result"]
+
+        if task and task["status"] == "failed":
+            # Previous attempt failed -> clear and retry
+            ai_task_manager.clear_task(user_id, domain)
+
+        # No task running -> start AI in background, return processing immediately
+        ai_task_manager.set_processing(user_id, domain)
+        progress = await self.calculate_progress(domain, user_id)
+
+        # Launch background task (non-blocking)
+        asyncio.create_task(
+            self._run_ai_in_background(user_id, domain)
+        )
+
+        logger.info(f"AI background task started for {domain} (user {user_id}) -- returning processing status")
+        return DomainFlowOut(
+            status="processing",
+            current=None,
+            next=None,
+            progress=progress,
+            redirect="processing",
+        )
+
+    async def _run_ai_in_background(self, user_id: int, domain: str) -> None:
+        """Runs AI processing in background with its own DB session."""
+        from app.core.database import AsyncSessionLocal
+        try:
+            async with AsyncSessionLocal() as db:
+                service = DomainService(db)
+                result = await service._process_ai_completion(user_id, domain)
+                ai_task_manager.set_completed(user_id, domain, result)
+                logger.info(f"Background AI task completed for {domain} (user {user_id})")
+        except Exception as e:
+            ai_task_manager.set_failed(user_id, domain, str(e))
+            logger.error(f"Background AI task failed for {domain} (user {user_id}): {e}", exc_info=True)
 
     _DOMAIN_ICONS: dict[str, str] = {
         "skincare":  "https://api.lookslabai.com/static/icons/SkinCare.jpg",
@@ -364,11 +417,9 @@ class DomainService:
                 except Exception as e:
                     logger.error(f"AI processing failed for {domain} (user {user_id}): {e}", exc_info=settings.is_development)
 
-        # Save AI output to insights + score history
         if ai_output:
             score = self._extract_score(domain, ai_output)
 
-            # Save insight
             try:
                 await InsightService(self.db).create_or_update_insight(InsightCreate(
                     user_id=user_id,
@@ -380,7 +431,6 @@ class DomainService:
             except Exception as e:
                 logger.error(f"Failed to save insight for {domain} (user {user_id}): {e}", exc_info=settings.is_development)
 
-            
             if score is not None:
                 try:
                     await ProgressService(self.db).save_score_snapshot(user_id, domain, score)
