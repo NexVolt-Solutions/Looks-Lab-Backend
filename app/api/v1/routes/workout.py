@@ -33,7 +33,7 @@ async def generate_workout_plan(
             "goals": "General fitness",
         }
 
-        for answer in onboarding.answers:  # .answers is a list of OnboardingAnswerWithQuestion
+        for answer in onboarding.answers:  
             question_lower = answer.question.lower()
             if "fitness level" in question_lower or "experience" in question_lower:
                 user_data["fitness_level"] = str(answer.answer)

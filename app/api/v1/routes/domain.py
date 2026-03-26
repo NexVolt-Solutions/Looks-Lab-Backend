@@ -12,6 +12,7 @@ from app.models.image import ImageType
 from app.models.user import User
 from app.schemas.domain import (
     DomainAnswerCreate,
+    DomainBulkAnswerCreate,
     DomainAnswersOut,
     DomainFlowOut,
     DomainQuestionOut,
@@ -140,7 +141,7 @@ async def get_domain_questions(
     return await service.get_domain_questions(domain)
 
 
-@router.get("/{domain}/flow", response_model=DomainFlowOut)
+@router.get("/{domain}/flow", response_model=DomainFlowOut, response_model_exclude_none=True)
 @limiter.limit(RateLimits.AI)
 async def get_domain_flow(
     request: Request,
@@ -154,7 +155,7 @@ async def get_domain_flow(
     return await service.next_or_complete(current_user.id, domain)
 
 
-@router.post("/{domain}/answers", response_model=DomainFlowOut)
+@router.post("/{domain}/answers", response_model=DomainFlowOut, response_model_exclude_none=True)
 @limiter.limit(RateLimits.DEFAULT)
 async def submit_domain_answer(
     request: Request,
@@ -168,6 +169,25 @@ async def submit_domain_answer(
     validate_domain(domain)
     await service.check_domain_access(current_user.id, domain)
     await service.save_answer(domain, payload)
+    return await service.next_or_complete(current_user.id, domain)
+
+
+@router.post("/{domain}/answers/bulk", response_model=DomainFlowOut)
+@limiter.limit(RateLimits.DEFAULT)
+async def submit_domain_answers_bulk(
+    request: Request,
+    domain: str,
+    payload: DomainBulkAnswerCreate,
+    db: AsyncSession = Depends(get_async_db),
+    current_user: User = Depends(get_current_user),
+):
+    service = DomainService(db)
+    validate_domain(domain)
+    await service.check_domain_access(current_user.id, domain)
+    for answer in payload.answers:
+        answer.user_id = current_user.id
+        answer.domain = domain
+        await service.save_answer(domain, answer)
     return await service.next_or_complete(current_user.id, domain)
 
 
@@ -185,7 +205,7 @@ async def get_domain_answers(
     return {"user_id": current_user.id, "domain": domain, "answers": answers}
 
 
-@router.post("/{domain}/retry-ai", response_model=DomainFlowOut)
+@router.post("/{domain}/retry-ai", response_model=DomainFlowOut, response_model_exclude_none=True)
 @limiter.limit(RateLimits.AI)
 async def retry_ai_processing(
     request: Request,

@@ -40,6 +40,10 @@ class DomainAnswerItem(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class DomainBulkAnswerCreate(BaseModel):
+    answers: list[DomainAnswerCreate]
+
+
 class DomainAnswersOut(BaseModel):
     user_id: int
     domain: str
@@ -60,7 +64,7 @@ class DomainFlowOut(BaseModel):
     status: str  # "ok" | "processing" | "completed"
     current: Optional[DomainQuestionOut] = None
     next: Optional[DomainQuestionOut] = None
-    progress: DomainProgressOut
+    progress: Optional[DomainProgressOut] = None
     redirect: Optional[str] = None
     ai_attributes: Optional[dict[str, Any]] = None
     ai_health: Optional[dict[str, Any]] = None
@@ -76,6 +80,12 @@ class DomainFlowOut(BaseModel):
     ai_nutrition: Optional[dict[str, Any]] = None
     ai_recovery: Optional[dict[str, Any]] = None
     ai_features: Optional[dict[str, Any]] = None
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    def model_dump(self, **kwargs):
+        kwargs.setdefault("exclude_none", True)
+        return super().model_dump(**kwargs)
 
 
 class DomainProgressItem(BaseModel):

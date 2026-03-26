@@ -90,6 +90,9 @@ class OnboardingService:
         from app.models.user import User
         user = await self.db.get(User, user_id)
 
+        if user:
+            user.onboarding_complete = True
+            await self.db.commit()
         answers_result = await self.db.execute(
             select(OnboardingAnswer, OnboardingQuestion)
             .join(OnboardingQuestion, OnboardingAnswer.question_id == OnboardingQuestion.id)
