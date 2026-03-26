@@ -53,3 +53,6 @@ pytest-asyncio==0.23.6
 httpx==0.27.2
 coverage==7.6.1
 
+# ── Monitoring / Metrics ──────────────────────────────────────
+prometheus-fastapi-instrumentator==7.0.2
+

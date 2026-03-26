@@ -440,6 +440,13 @@ class DomainService:
         def _get(key: str) -> Optional[Any]:
             return ai_output.get(key) if ai_output else None
 
+        if domain == "workout":
+            return DomainFlowOut(
+                status="completed",
+                redirect="completed_flow",
+                ai_attributes=_get("attributes"),
+            )
+
         return DomainFlowOut(
             status="completed",
             current=None,

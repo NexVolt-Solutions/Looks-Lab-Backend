@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from enum import Enum
 
 
@@ -17,6 +17,13 @@ class GenerateWorkoutRequest(BaseModel):
     activity_level: str = Field(default="moderate")
     duration_minutes: int = Field(default=30, ge=10, le=120)
 
+    @field_validator("focus", mode="before")
+    @classmethod
+    def normalize_focus(cls, v):
+        if isinstance(v, str):
+            return v.lower()
+        return v
+
 
 class WorkoutExercise(BaseModel):
     name: str
@@ -26,7 +33,7 @@ class WorkoutExercise(BaseModel):
     rest_seconds: int
     instructions: str
     benefits: str
-    difficulty: str
+    difficulty: Optional[str] = None
 
 
 class WorkoutInsight(BaseModel):
@@ -44,4 +51,5 @@ class WorkoutPlanOut(BaseModel):
     insight: WorkoutInsight
     exercises: list[WorkoutExercise]
     generated_at: datetime
-
+    
+    

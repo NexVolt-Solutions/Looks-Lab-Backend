@@ -65,12 +65,6 @@ services:
     volumes:
       - ./media:/app/media
       - ./logs:/app/logs
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 120s
     restart: unless-stopped
     networks:
       - lookslab_network
@@ -89,4 +83,5 @@ volumes:
 networks:
   lookslab_network:
     driver: bridge
-
+    
+    

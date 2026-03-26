@@ -21,13 +21,11 @@ Return STRICT JSON ONLY with this schema:
   "attributes": {{
     "intensity": "Low|Moderate|High",
     "activity": "Sedentary|Moderate|Active",
-    "goal": "Fat Loss|Muscle Gain|General Fitness|Weight Maintenance",
-    "diet_type": "Balanced|High-Protein|Vegetarian",
+    "title": "Short motivational subtitle for the workout domain",
     "today_focus": ["Flexibility", "Build Muscle", "Fatloss", "Strength"],
-    "posture_insight": "Consistency improves stamina, strength & metabolism over time. Keep pushing!",
-    "workout_summary": {{
-      "total_exercises": 6,
-      "total_duration_min": 22
+    "posture_insight": {{
+      "title": "Posture Insight",
+      "message": "Personalized insight based on user answers"
     }}
   }},
   "exercises": {{

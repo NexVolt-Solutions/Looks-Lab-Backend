@@ -83,10 +83,27 @@ def run_gemini_json(
         try:
             logger.info(f"Gemini API call: domain={domain} attempt={attempt + 1}/{max_retries + 1}")
 
-            response = genai.GenerativeModel(model_name).generate_content(
-                prompt,
-                request_options={"timeout": timeout}
-            )
+            # Try with JSON mode first to force valid JSON output
+            try:
+                response = genai.GenerativeModel(model_name).generate_content(
+                    prompt,
+                    generation_config=genai.GenerationConfig(
+                        temperature=0.5,
+                        max_output_tokens=4000,
+                        response_mime_type="application/json",
+                    ),
+                    request_options={"timeout": timeout}
+                )
+            except Exception:
+                # Fallback if model does not support JSON mode
+                response = genai.GenerativeModel(model_name).generate_content(
+                    prompt,
+                    generation_config=genai.GenerationConfig(
+                        temperature=0.5,
+                        max_output_tokens=4000,
+                    ),
+                    request_options={"timeout": timeout}
+                )
 
             if not response or not response.text:
                 raise GeminiError("Empty response from Gemini API")
@@ -132,4 +149,5 @@ def run_gemini_json_safe(
     except GeminiError as e:
         logger.error(f"Gemini API error for {domain} (returning fallback): {e}")
         return fallback or {}
-
+        
+        
