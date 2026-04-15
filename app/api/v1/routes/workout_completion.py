@@ -12,43 +12,13 @@ from app.schemas.workout_completion import (
     WeeklyWorkoutSummaryOut, WorkoutProgressSummaryOut,
     DailyRecoveryOut, DailyRecoverySave, WorkoutStatsOut
 )
-from app.services.workout_completion_service import WorkoutCompletionService
+from app.services.workout_completion_service import WorkoutCompletionService, DailyRecoveryService
 from app.utils.jwt_utils import get_current_user
 
 router = APIRouter()
 
 
-@router.get("/workout/completed-exercises", response_model=WorkoutCompletionOut)
-@limiter.limit(RateLimits.DEFAULT)
-async def get_completed_exercises(
-    request: Request,
-    date: date,
-    db: AsyncSession = Depends(get_async_db),
-    current_user: User = Depends(get_current_user),
-):
-    service = WorkoutCompletionService(db)
-    result = await service.get_completion(current_user.id, date)
-    if not result:
-        return WorkoutCompletionOut(
-            date=date,
-            completed_indices=[],
-            total_exercises=6,
-            score=0.0,
-        )
-    return result
-
-
-@router.put("/workout/completed-exercises", response_model=WorkoutCompletionOut)
-@limiter.limit(RateLimits.DEFAULT)
-async def save_completed_exercises(
-    request: Request,
-    payload: WorkoutCompletionSave,
-    db: AsyncSession = Depends(get_async_db),
-    current_user: User = Depends(get_current_user),
-):
-    service = WorkoutCompletionService(db)
-    return await service.save_completion(current_user.id, payload)
-
+# --- Workout-specific endpoints (must be BEFORE generic /{domain} routes) ----
 
 @router.get("/workout/weekly-summary", response_model=WeeklyWorkoutSummaryOut)
 @limiter.limit(RateLimits.DEFAULT)
@@ -69,13 +39,7 @@ async def get_workout_progress_summary(
     db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(get_current_user),
 ):
-    """
-    Get workout progress summary for week, month, or year.
-
-    - period=week  ? last 7 days
-    - period=month ? current month from day 1
-    - period=year  ? current year from Jan 1
-    """
+    """Get workout progress summary. period: week | month | year"""
     service = WorkoutCompletionService(db)
     return await service.get_progress_summary(current_user.id, period)
 
@@ -88,8 +52,6 @@ async def get_recovery_checklist(
     db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Get daily recovery checklist for a specific date."""
-    from app.services.workout_completion_service import DailyRecoveryService
     service = DailyRecoveryService(db)
     return await service.get_recovery(current_user.id, date)
 
@@ -102,8 +64,6 @@ async def save_recovery_checklist(
     db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Save or update daily recovery checklist."""
-    from app.services.workout_completion_service import DailyRecoveryService
     service = DailyRecoveryService(db)
     return await service.save_recovery(current_user.id, payload)
 
@@ -115,14 +75,47 @@ async def get_workout_stats(
     db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(get_current_user),
 ):
-    """
-    Get workout stats for the progress screen top cards:
-    - weekly_calories: estimated calories burned this week
-    - consistency_percent: % of days active this week
-    - strength_label: strength gain label from AI (e.g. '+12%')
-    """
-    from app.services.workout_completion_service import DailyRecoveryService
+    """Get workout stats: weekly_calories, consistency_percent, strength_label."""
     service = DailyRecoveryService(db)
     return await service.get_workout_stats(current_user.id)
+
+
+# --- Generic domain completion endpoints (must be LAST) ----------------------
+
+@router.get("/{domain}/completed-exercises", response_model=WorkoutCompletionOut)
+@limiter.limit(RateLimits.DEFAULT)
+async def get_completed_exercises(
+    request: Request,
+    domain: str,
+    date: date,
+    db: AsyncSession = Depends(get_async_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Get completed exercise indices for any domain on a specific date."""
+    service = WorkoutCompletionService(db)
+    result = await service.get_completion(current_user.id, date, domain=domain)
+    if not result:
+        return WorkoutCompletionOut(
+            date=date,
+            completed_indices=[],
+            total_exercises=6,
+            score=0.0,
+            recovery_completed_indices=[],
+        )
+    return result
+
+
+@router.put("/{domain}/completed-exercises", response_model=WorkoutCompletionOut)
+@limiter.limit(RateLimits.DEFAULT)
+async def save_completed_exercises(
+    request: Request,
+    domain: str,
+    payload: WorkoutCompletionSave,
+    db: AsyncSession = Depends(get_async_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Save or update completed exercise indices for any domain."""
+    service = WorkoutCompletionService(db)
+    return await service.save_completion(current_user.id, payload, domain=domain)
     
     

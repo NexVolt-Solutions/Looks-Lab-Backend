@@ -34,14 +34,14 @@ async def generate_meal_plan(
             "activity_level": "moderate",
         }
 
-        if wellness.get("weight"):
+        if wellness.weight:
             try:
-                user_data["weight"] = float(str(wellness["weight"]).split()[0])
+                user_data["weight"] = float(str(wellness.weight).split()[0])
             except ValueError:
                 pass
 
-        if wellness.get("height"):
-            height_str = str(wellness["height"])
+        if wellness.height:
+            height_str = str(wellness.height)
             try:
                 if "ft" in height_str.lower():
                     user_data["height"] = float(height_str.split()[0]) * 30.48
@@ -57,9 +57,9 @@ async def generate_meal_plan(
             "very active": "active",
             "extremely active": "very_active",
         }
-        for answer in answers.get("answers", []):
-            if "activity" in answer["question"].lower() or "exercise" in answer["question"].lower():
-                answer_lower = str(answer["answer"]).lower()
+        for answer in answers.answers:
+            if "activity" in answer.question.lower() or "exercise" in answer.question.lower():
+                answer_lower = str(answer.answer).lower()
                 for key, value in activity_map.items():
                     if key in answer_lower:
                         user_data["activity_level"] = value

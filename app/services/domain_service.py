@@ -177,6 +177,18 @@ class DomainService:
             for answer, question in result.all()
         ]
 
+    async def reset_domain_answers(self, user_id: int, domain: str) -> None:
+        from sqlalchemy import delete
+        await self.db.execute(
+            delete(DomainAnswer).where(
+                DomainAnswer.user_id == user_id,
+                DomainAnswer.domain == domain,
+            )
+        )
+        await self.db.commit()
+        ai_task_manager.clear_task(user_id, domain)
+        logger.info(f"Reset domain answers for {domain} (user {user_id})")
+
     async def calculate_progress(self, domain: str, user_id: int) -> DomainProgressOut:
         questions = await self.get_domain_questions(domain)
 
@@ -364,14 +376,50 @@ class DomainService:
         if not ai_output:
             return None
 
+        # For workout: derive score from intensity
+        if domain == "workout":
+            attributes = ai_output.get("attributes", {})
+            if isinstance(attributes, dict):
+                intensity = str(attributes.get("intensity", "")).lower()
+                intensity_score_map = {"low": 40.0, "moderate": 65.0, "high": 85.0}
+                return intensity_score_map.get(intensity, 60.0)
+
+        # For quit_porn: derive score from progress_tracking.recovery_score
+        if domain == "skincare":
+            routine = _get("routine") or {}
+            return DomainFlowOut(
+                status="completed",
+                redirect="completed_flow",
+                progress=progress,
+                ai_attributes=_get("attributes"),
+                ai_health=_get("health"),
+                ai_concerns=_get("concerns"),
+                ai_message=_get("motivational_message"),
+                ai_remedies=_get("remedies"),
+                ai_products=_get("products"),
+                ai_routine={
+                    "today": routine.get("today") or [],
+                    "night": routine.get("night") or [],
+                    "morning": routine.get("today") or [],
+                    "evening": routine.get("night") or [],
+                },
+            )
+
+        if domain == "quit_porn":
+            progress = ai_output.get("progress_tracking", {})
+            if isinstance(progress, dict):
+                raw = str(progress.get("recovery_score", "")).replace("%", "").replace("+", "").strip()
+                try:
+                    return min(max(float(raw), 0.0), 100.0)
+                except ValueError:
+                    return 50.0
+
         score_field_map = {
             "skincare":  "health_score",
             "haircare":  "health_score",
             "facial":    "health_score",
             "diet":      "health_score",
             "height":    "health_score",
-            "workout":   "health_score",
-            "quit_porn": "health_score",
             "fashion":   "health_score",
         }
 
@@ -387,6 +435,15 @@ class DomainService:
             attributes = ai_output.get("attributes", {})
             if isinstance(attributes, dict):
                 score = attributes.get("overall_score") or attributes.get("score")
+
+        if score is None:
+            progress = ai_output.get("progress_tracking", {})
+            if isinstance(progress, dict):
+                raw = str(progress.get("recovery_score", "")).replace("%", "").strip()
+                try:
+                    score = float(raw) if raw else None
+                except ValueError:
+                    pass
 
         if score is not None:
             try:
@@ -437,14 +494,128 @@ class DomainService:
                 except Exception as e:
                     logger.error(f"Failed to save score snapshot for {domain} (user {user_id}): {e}", exc_info=settings.is_development)
 
+            # For image-based domains: update image rows from pending -> processed with analysis_result
+            if domain in ("skincare", "haircare", "facial", "fashion"):
+                try:
+                    from app.models.image import Image, ImageStatus
+                    from sqlalchemy import select as sa_select
+                    img_result = await self.db.execute(
+                        sa_select(Image).where(
+                            Image.user_id == user_id,
+                            Image.domain == domain,
+                            Image.status == ImageStatus.processing,
+                        )
+                    )
+                    processing_images = img_result.scalars().all()
+
+                    # Build real bullet points from AI concerns output
+                    concerns = ai_output.get("concerns", {})
+                    points = []
+                    if isinstance(concerns, dict):
+                        for key, val in concerns.items():
+                            if isinstance(val, dict):
+                                label = val.get("label", "")
+                                if label and label.lower() not in ("none", "normal"):
+                                    points.append(f"{key.replace(chr(95), chr(32)).title()}: {label}")
+                    if not points:
+                        points = ["Analysis complete. Check your routine for personalized recommendations."]
+
+                    analysis_result = {"points": points}
+
+                    for img in processing_images:
+                        img.status = ImageStatus.processed
+                        img.analysis_result = analysis_result
+                        from datetime import datetime, timezone as tz
+                        img.processed_at = datetime.now(tz.utc)
+
+                    if processing_images:
+                        await self.db.commit()
+                        logger.info(f"Updated {len(processing_images)} images to processed for {domain} (user {user_id})")
+                except Exception as e:
+                    logger.error(f"Failed to update image status for {domain} (user {user_id}): {e}", exc_info=settings.is_development)
+
         def _get(key: str) -> Optional[Any]:
             return ai_output.get(key) if ai_output else None
 
+        if domain == "skincare":
+            routine = _get("routine") or {}
+            return DomainFlowOut(
+                status="completed",
+                redirect="completed_flow",
+                progress=progress,
+                ai_attributes=_get("attributes"),
+                ai_health=_get("health"),
+                ai_concerns=_get("concerns"),
+                ai_message=_get("motivational_message"),
+                ai_remedies=_get("remedies"),
+                ai_products=_get("products"),
+                ai_routine={
+                    "today": routine.get("today") or [],
+                    "night": routine.get("night") or [],
+                    "morning": routine.get("today") or [],
+                    "evening": routine.get("night") or [],
+                },
+            )
+
+        if domain == "quit_porn":
+            progress_tracking = _get("progress_tracking") or {}
+            recovery_path = _get("recovery_path") or {}
+            # Ensure daily_tasks is always a list
+            daily_tasks = recovery_path.get("daily_tasks") or []
+            streak = recovery_path.get("streak") or {
+                "current_streak": 0,
+                "longest_streak": 0,
+                "next_goal": 7,
+                "streak_message": "Today is day one. Let's make it count!"
+            }
+            return DomainFlowOut(
+                status="completed",
+                redirect="completed_flow",
+                progress=progress,
+                ai_attributes=_get("attributes"),
+                ai_message=_get("motivational_message"),
+                ai_progress={
+                    "consistency": progress_tracking.get("consistency", "42%"),
+                    "recovery_score": progress_tracking.get("recovery_score", "58%"),
+                    "recovery_checklist": progress_tracking.get("recovery_checklist") or [
+                        "Set your daily intention",
+                        "Evening reflection",
+                        "Productive alone time",
+                        "Connect with someone",
+                    ],
+                },
+                ai_recovery={
+                    "streak": streak,
+                    "daily_tasks": daily_tasks,
+                },
+            )
+
         if domain == "workout":
+            # Build ai_progress with AI values + static recovery checklist labels
+            attributes = _get("attributes") or {}
+            intensity = str(attributes.get("intensity", "Moderate")).lower()
+            strength_map = {"low": "+5%", "moderate": "+12%", "high": "+20%"}
+            strength_gain = strength_map.get(intensity, "+12%")
+            progress_tracking = _get("progress_tracking") or {}
+            ai_progress = {
+                "weekly_calories": progress_tracking.get("weekly_calories", "2300"),
+                "consistency": progress_tracking.get("fitness_consistency", "85%"),
+                "strength_gain": strength_gain,
+                "fitness_consistency": progress_tracking.get("fitness_consistency", "85%"),
+                "calorie_balance": "85%",
+                "hydration": "85%",
+                "recovery_checklist": [
+                    "Got 7+ hours of sleep",
+                    "Drank 8+ glasses of water",
+                    "Stretched for 10 minutes",
+                    "Took a rest if needed",
+                ],
+            }
             return DomainFlowOut(
                 status="completed",
                 redirect="completed_flow",
                 ai_attributes=_get("attributes"),
+                ai_progress=ai_progress,
             )
 
         return DomainFlowOut(

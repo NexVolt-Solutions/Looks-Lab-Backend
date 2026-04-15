@@ -48,6 +48,14 @@ class ImageService:
 
             url = self._storage.get_url(file_path)
 
+            # Image-based domains start as processing (AI will analyze)
+            # Non-domain images start as pending
+            initial_status = (
+                ImageStatus.processing
+                if domain in ("skincare", "haircare", "facial", "fashion")
+                else ImageStatus.pending
+            )
+
             image = Image(
                 user_id=user_id,
                 file_path=file_path,
@@ -56,7 +64,7 @@ class ImageService:
                 mime_type=file.content_type,
                 file_size=file_size,
                 image_type=image_type or ImageType.uploaded,
-                status=ImageStatus.pending,
+                status=initial_status,
                 domain=domain,
                 view=view,
                 uploaded_at=datetime.now(timezone.utc),
@@ -67,6 +75,23 @@ class ImageService:
             await self.db.refresh(image)
 
             logger.info(f"Uploaded image {image.id} for user {user_id} ({domain or 'general'}/{view or 'none'}) — {file_size / 1024:.1f}KB")
+
+            # Clear only the in-memory AI task cache so AI re-runs with new images
+            # We keep the old insight in DB for progress history
+            if domain in ("skincare", "haircare", "facial", "fashion"):
+                try:
+                    from app.utils import ai_task_manager
+                    ai_task_manager.clear_task(user_id, domain)
+                    logger.info(f"Cleared AI task cache for {domain} (user {user_id}) — will re-run with new images")
+                except Exception as e:
+                    logger.warning(f"Failed to clear AI task cache for {domain} (user {user_id}): {e}")
+
+                # Run quick vision analysis in background for real per-image bullets
+                import asyncio
+                asyncio.create_task(
+                    self._run_quick_analysis(image.id, image.url or image.s3_key, domain, user_id)
+                )
+
             return image
 
         except HTTPException:
@@ -106,11 +131,21 @@ class ImageService:
 
         query = query.order_by(Image.uploaded_at.desc())
         result = await self.db.execute(query)
-        return list(result.scalars().all())
+        all_images = list(result.scalars().all())
 
-    def get_image_url(self, image: Image, expires_in: int = 3600) -> str:
-        key = image.s3_key or image.file_path
-        return self._storage.get_url(key, expires_in)
+        # For image-based domains: return only the latest image per view
+        # This prevents Flutter from getting confused by duplicate uploads
+        if domain and domain in ("skincare", "haircare", "facial", "fashion") and not view and not image_status:
+            seen_views = set()
+            latest_per_view = []
+            for img in all_images:  # already ordered by uploaded_at desc
+                if img.view not in seen_views:
+                    seen_views.add(img.view)
+                    latest_per_view.append(img)
+
+            return latest_per_view
+
+        return all_images
 
     async def update_image(self, image_id: int, user_id: int, payload: ImageUpdate) -> Image:
         image = await self.get_image(image_id, user_id)
@@ -134,22 +169,66 @@ class ImageService:
         logger.info(f"Updated image {image_id} for user {user_id}")
         return image
 
-    async def mark_processed(self, image_id: int, analysis_result: dict | str) -> Image:
-        result = await self.db.execute(select(Image).where(Image.id == image_id))
-        image = result.scalar_one_or_none()
 
-        if not image:
-            raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail="Image not found")
+    async def _run_quick_analysis(self, image_id: int, image_url: str, domain: str, user_id: int) -> None:
+        """Run quick Gemini vision analysis on uploaded image to generate real bullets."""
+        try:
+            import asyncio
+            import json
+            import httpx
+            import google.generativeai as genai
+            from app.core.config import settings
+            from app.ai.quick_analysis_prompt import get_quick_prompt
+            from app.core.database import AsyncSessionLocal
 
-        image.status = ImageStatus.processed
-        image.analysis_result = analysis_result
-        image.processed_at = datetime.now(timezone.utc)
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.get(image_url)
+                if resp.status_code != 200:
+                    logger.warning(f"Quick analysis: could not fetch image {image_id}")
+                    return
+                image_bytes = resp.content
+                content_type = resp.headers.get("content-type", "image/jpeg")
 
-        await self.db.commit()
-        await self.db.refresh(image)
+            prompt = get_quick_prompt(domain)
+            image_part = {"mime_type": content_type, "data": image_bytes}
 
-        logger.info(f"Marked image {image_id} as processed")
-        return image
+            loop = asyncio.get_event_loop()
+
+            def _call_gemini():
+                mdl = genai.GenerativeModel(settings.GEMINI_MODEL)
+                return mdl.generate_content(
+                    [prompt, image_part],
+                    generation_config=genai.GenerationConfig(
+                        temperature=0.3,
+                        max_output_tokens=300,
+                        response_mime_type="application/json",
+                    ),
+                    request_options={"timeout": 15}
+                )
+
+            response = await loop.run_in_executor(None, _call_gemini)
+
+            if not response or not response.text:
+                return
+
+            text = response.text.strip()
+            data = json.loads(text)
+            points = data.get("points", [])
+
+            if not points or not isinstance(points, list):
+                return
+
+            async with AsyncSessionLocal() as db:
+                from sqlalchemy import select as sa_select
+                result = await db.execute(sa_select(Image).where(Image.id == image_id))
+                img = result.scalar_one_or_none()
+                if img and img.status == ImageStatus.processing:
+                    img.analysis_result = {"points": [str(p) for p in points[:5]], "is_preview": True}
+                    await db.commit()
+                    logger.info(f"Quick vision analysis complete for image {image_id} ({domain}) user {user_id}")
+
+        except Exception as e:
+            logger.warning(f"Quick analysis failed for image {image_id}: {e}")
 
     async def mark_failed(self, image_id: int, error_message: Optional[str] = None) -> Image:
         result = await self.db.execute(select(Image).where(Image.id == image_id))

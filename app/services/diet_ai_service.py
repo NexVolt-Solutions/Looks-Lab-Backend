@@ -156,7 +156,7 @@ Rules:
         try:
             response = model.generate_content(
                 prompt,
-                generation_config=genai.GenerationConfig(temperature=0.7, max_output_tokens=3000)
+                generation_config=genai.GenerationConfig(temperature=0.7, max_output_tokens=8192)
             )
 
             response_text = response.text.strip()

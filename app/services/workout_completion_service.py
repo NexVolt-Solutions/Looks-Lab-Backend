@@ -15,11 +15,12 @@ class WorkoutCompletionService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def get_completion(self, user_id: int, target_date: date) -> Optional[WorkoutCompletionOut]:
+    async def get_completion(self, user_id: int, target_date: date, domain: str = "workout") -> Optional[WorkoutCompletionOut]:
         result = await self.db.execute(
             select(WorkoutCompletion).where(
                 WorkoutCompletion.user_id == user_id,
                 WorkoutCompletion.date == target_date,
+                WorkoutCompletion.domain == domain,
             )
         )
         record = result.scalar_one_or_none()
@@ -30,9 +31,10 @@ class WorkoutCompletionService:
             completed_indices=record.completed_indices or [],
             total_exercises=record.total_exercises,
             score=record.score,
+            recovery_completed_indices=record.recovery_completed_indices or [],
         )
 
-    async def save_completion(self, user_id: int, payload: WorkoutCompletionSave) -> WorkoutCompletionOut:
+    async def save_completion(self, user_id: int, payload: WorkoutCompletionSave, domain: str = "workout") -> WorkoutCompletionOut:
         total = payload.total_exercises or 6
         completed_count = len(payload.completed_indices)
         score = round((completed_count / total) * 100, 1) if total > 0 else 0.0
@@ -41,6 +43,7 @@ class WorkoutCompletionService:
             select(WorkoutCompletion).where(
                 WorkoutCompletion.user_id == user_id,
                 WorkoutCompletion.date == payload.date,
+                WorkoutCompletion.domain == domain,
             )
         )
         existing = result.scalar_one_or_none()
@@ -49,13 +52,16 @@ class WorkoutCompletionService:
             existing.completed_indices = payload.completed_indices
             existing.total_exercises = total
             existing.score = score
+            existing.recovery_completed_indices = payload.recovery_completed_indices or []
         else:
             self.db.add(WorkoutCompletion(
                 user_id=user_id,
+                domain=domain,
                 date=payload.date,
                 completed_indices=payload.completed_indices,
                 total_exercises=total,
                 score=score,
+                recovery_completed_indices=payload.recovery_completed_indices or [],
             ))
 
         await self.db.commit()
@@ -65,15 +71,45 @@ class WorkoutCompletionService:
             completed_indices=payload.completed_indices,
             total_exercises=total,
             score=score,
+            recovery_completed_indices=payload.recovery_completed_indices or [],
         )
 
     async def get_weekly_summary(self, user_id: int) -> WeeklyWorkoutSummaryOut:
-        """Backward compatible weekly summary."""
-        summary = await self.get_progress_summary(user_id, "week")
+        """Returns full ISO week Mon-Sun with 0s for missing days."""
+        today = date.today()
+        # Get Monday of current ISO week
+        monday = today - timedelta(days=today.weekday())
+        week_dates = [monday + timedelta(days=i) for i in range(7)]
+
+        result = await self.db.execute(
+            select(WorkoutCompletion).where(
+                WorkoutCompletion.user_id == user_id,
+                WorkoutCompletion.date >= monday,
+                WorkoutCompletion.date <= monday + timedelta(days=6),
+            )
+        )
+        records = {r.date: r for r in result.scalars().all()}
+
+        days = []
+        for d in week_dates:
+            if d in records:
+                r = records[d]
+                days.append(WorkoutSummaryItem(
+                    date=d,
+                    score=r.score,
+                    completed=len(r.completed_indices or []),
+                    total=r.total_exercises,
+                ))
+            else:
+                days.append(WorkoutSummaryItem(date=d, score=0.0, completed=0, total=6))
+
+        scores = [d.score for d in days if d.score > 0]
+        week_average = round(sum(scores) / len(scores), 1) if scores else 0.0
+
         return WeeklyWorkoutSummaryOut(
             user_id=user_id,
-            week_average=summary.average_score,
-            days=summary.days,
+            week_average=week_average,
+            days=days,
         )
 
     async def get_progress_summary(self, user_id: int, period: str) -> WorkoutProgressSummaryOut:
@@ -144,14 +180,19 @@ class DailyRecoveryService:
             )
         )
         record = result.scalar_one_or_none()
+        from app.schemas.workout_completion import RECOVERY_LABELS, RecoveryItem
         if not record:
-            return DailyRecoveryOut(date=target_date, sleep=False, water=False, stretched=False, rested=False)
+            items = [RecoveryItem(label=l, done=False) for l in RECOVERY_LABELS]
+            return DailyRecoveryOut(date=target_date, sleep=False, water=False, stretched=False, rested=False, items=items)
+        bools = [record.sleep, record.water, record.stretched, record.rested]
+        items = [RecoveryItem(label=l, done=b) for l, b in zip(RECOVERY_LABELS, bools)]
         return DailyRecoveryOut(
             date=record.date,
             sleep=record.sleep,
             water=record.water,
             stretched=record.stretched,
             rested=record.rested,
+            items=items,
         )
 
     async def save_recovery(self, user_id: int, payload):
@@ -180,12 +221,16 @@ class DailyRecoveryService:
             ))
         await self.db.commit()
         logger.info(f"Recovery checklist saved for user {user_id} date={payload.date}")
+        from app.schemas.workout_completion import RECOVERY_LABELS, RecoveryItem
+        bools = [payload.sleep, payload.water, payload.stretched, payload.rested]
+        items = [RecoveryItem(label=l, done=b) for l, b in zip(RECOVERY_LABELS, bools)]
         return DailyRecoveryOut(
             date=payload.date,
             sleep=payload.sleep,
             water=payload.water,
             stretched=payload.stretched,
             rested=payload.rested,
+            items=items,
         )
 
     async def get_workout_stats(self, user_id: int):

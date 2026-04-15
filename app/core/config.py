@@ -45,7 +45,7 @@ class Settings(BaseSettings):
     ENABLE_SECURITY_HEADERS: bool = True
 
     GEMINI_API_KEY: str
-    GEMINI_MODEL: str = "gemini-3-flash-preview"
+    GEMINI_MODEL: str = "gemini-2.5-flash"
 
     EMAIL_PROVIDER: str = "ses"
     SES_REGION: str | None = None

@@ -81,7 +81,8 @@ class OnboardingService:
         session = await self.get_session(session_id)
 
         if session.user_id:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Session already linked to a user")
+            # Idempotent — already linked, return session as-is
+            return session
 
         session.user_id = user_id
         session.is_completed = True
@@ -90,9 +91,6 @@ class OnboardingService:
         from app.models.user import User
         user = await self.db.get(User, user_id)
 
-        if user:
-            user.onboarding_complete = True
-            await self.db.commit()
         answers_result = await self.db.execute(
             select(OnboardingAnswer, OnboardingQuestion)
             .join(OnboardingQuestion, OnboardingAnswer.question_id == OnboardingQuestion.id)

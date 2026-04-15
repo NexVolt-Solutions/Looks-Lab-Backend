@@ -37,6 +37,7 @@ class ProgressService:
         - Subsequent runs: saves normally with is_first_score=False (updates after score)
         """
         try:
+            # Check if a first score already exists for this user+domain
             result = await self.db.execute(
                 select(DomainScoreHistory).where(
                     DomainScoreHistory.user_id == user_id,
@@ -96,7 +97,11 @@ class ProgressService:
         all_first_scores = []
         all_latest_scores = []
 
-        for domain, records in grouped.items():
+        # Always include all known domains, even if no scores in period
+        all_domains = set(grouped.keys()) | set(first_scores.keys()) | set(_DOMAIN_ICONS.keys())
+
+        for domain in sorted(all_domains):
+            records = grouped.get(domain, [])
             score_points = [
                 DomainScorePoint(
                     domain=r.domain,
@@ -107,9 +112,9 @@ class ProgressService:
             ]
 
             # Before = permanent first score ever recorded (static)
-            first_score = round(first_scores.get(domain, records[0].score), 1)
-            # After = latest score in the selected period (changes with period)
-            latest_score = round(records[-1].score, 1)
+            first_score = round(first_scores.get(domain, 0.0), 1)
+            # After = latest score in period, or fall back to first_score
+            latest_score = round(records[-1].score, 1) if records else first_score
             change = round(latest_score - first_score, 1)
 
             all_first_scores.append(first_score)
@@ -135,5 +140,31 @@ class ProgressService:
             overall_latest=overall_latest,
             overall_change=overall_change,
         )
+    async def get_domain_progress_graph(self, user_id: int, domain: str, period: str) -> dict:
+        """Get progress graph for a single domain."""
+        graph = await self.get_progress_graph(user_id, period)
+        domain_data = next((d for d in graph.domains if d.domain == domain), None)
+        if not domain_data:
+            return {
+                "period": period,
+                "domain": domain,
+                "icon_url": _DOMAIN_ICONS.get(domain),
+                "first_score": 0.0,
+                "latest_score": 0.0,
+                "change": 0.0,
+                "scores": [],
+            }
+        return {
+            "period": period,
+            "domain": domain_data.domain,
+            "icon_url": domain_data.icon_url,
+            "first_score": domain_data.first_score,
+            "latest_score": domain_data.latest_score,
+            "change": domain_data.change,
+            "scores": [
+                {"domain": s.domain, "score": s.score, "recorded_at": s.recorded_at}
+                for s in domain_data.scores
+            ],
+        }
         
         
