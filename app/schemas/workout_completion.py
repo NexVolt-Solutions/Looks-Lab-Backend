@@ -7,6 +7,7 @@ class WorkoutCompletionSave(BaseModel):
     date: date
     completed_indices: list[int] = Field(default=[])
     total_exercises: int = Field(default=6)
+    recovery_completed_indices: list[int] = Field(default=[])  # checklist item indices
 
 
 class WorkoutCompletionOut(BaseModel):
@@ -14,6 +15,7 @@ class WorkoutCompletionOut(BaseModel):
     completed_indices: list[int]
     total_exercises: int
     score: float
+    recovery_completed_indices: list[int] = Field(default=[])  # checklist item indices
 
 
 class WorkoutSummaryItem(BaseModel):
@@ -44,6 +46,19 @@ class WeeklyWorkoutSummaryOut(BaseModel):
     days: list[WorkoutSummaryItem]
 
 
+RECOVERY_LABELS = [
+    "Got 7+ hours of sleep",
+    "Drank 8+ glasses of water",
+    "Stretched for 10 minutes",
+    "Took a rest if needed",
+]
+
+
+class RecoveryItem(BaseModel):
+    label: str
+    done: bool
+
+
 class DailyRecoverySave(BaseModel):
     date: date
     sleep: bool = False
@@ -58,6 +73,7 @@ class DailyRecoveryOut(BaseModel):
     water: bool
     stretched: bool
     rested: bool
+    items: list[RecoveryItem]  # Flutter-friendly format
 
 
 class WorkoutStatsOut(BaseModel):

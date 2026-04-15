@@ -89,7 +89,7 @@ def run_gemini_json(
                     prompt,
                     generation_config=genai.GenerationConfig(
                         temperature=0.5,
-                        max_output_tokens=4000,
+                        max_output_tokens=8192,
                         response_mime_type="application/json",
                     ),
                     request_options={"timeout": timeout}
@@ -100,7 +100,7 @@ def run_gemini_json(
                     prompt,
                     generation_config=genai.GenerationConfig(
                         temperature=0.5,
-                        max_output_tokens=4000,
+                        max_output_tokens=8192,
                     ),
                     request_options={"timeout": timeout}
                 )

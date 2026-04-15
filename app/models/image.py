@@ -14,9 +14,10 @@ if TYPE_CHECKING:
 
 
 class ImageStatus(str, Enum):
-    pending = "pending"
-    processed = "processed"
-    failed = "failed"
+    pending = "pending"          
+    processing = "processing"    
+    processed = "processed"      
+    failed = "failed"            
 
 
 class ImageType(str, Enum):
@@ -57,4 +58,5 @@ class Image(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
     user: Mapped[User] = relationship("User", back_populates="images")
-
+    
+    
