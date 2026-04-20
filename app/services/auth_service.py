@@ -126,23 +126,41 @@ class AuthService:
         refresh_value = create_refresh_token()
         expires_at = get_refresh_expiry()
 
-        result = await self.db.execute(select(RefreshToken).where(RefreshToken.user_id == user.id))
-        existing_token = result.scalar_one_or_none()
+        result = await self.db.execute(
+            select(RefreshToken).where(
+                RefreshToken.user_id == user.id,
+                RefreshToken.is_revoked == False,  # noqa: E712
+            )
+        )
+        existing_tokens = result.scalars().all()
 
         try:
-            if existing_token:
-                existing_token.token = refresh_value
-                existing_token.expires_at = expires_at
-                existing_token.is_revoked = False
-                existing_token.device_info = device_info
-            else:
-                self.db.add(RefreshToken(
-                    user_id=user.id,
-                    token=refresh_value,
-                    expires_at=expires_at,
-                    is_revoked=False,
-                    device_info=device_info,
-                ))
+            # True rotation: revoke ALL active tokens (keep rows for theft detection)
+            # then insert a new token row
+            for token in existing_tokens:
+                token.is_revoked = True
+            await self.db.flush()
+
+            # Insert new token row
+            self.db.add(RefreshToken(
+                user_id=user.id,
+                token=refresh_value,
+                expires_at=expires_at,
+                is_revoked=False,
+                device_info=device_info,
+            ))
+
+            # Cleanup: delete old revoked tokens older than 30 days to prevent table bloat
+            from datetime import timedelta
+            from sqlalchemy import delete as sa_delete
+            cutoff = datetime.now(timezone.utc) - timedelta(days=30)
+            await self.db.execute(
+                sa_delete(RefreshToken).where(
+                    RefreshToken.user_id == user.id,
+                    RefreshToken.is_revoked == True,  # noqa: E712
+                    RefreshToken.updated_at < cutoff,
+                )
+            )
             await self.db.commit()
         except Exception as e:
             await self.db.rollback()
@@ -150,6 +168,9 @@ class AuthService:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to issue tokens")
 
         await self.db.refresh(user, attribute_names=["updated_at", "subscription"])
+
+        # Clean up old revoked tokens to keep the table lean
+        await self.cleanup_old_tokens(user.id)
 
         return TokenResponse(
             user=UserOut.model_validate(user),
@@ -165,9 +186,22 @@ class AuthService:
         token_record = result.scalar_one_or_none()
 
         if not token_record:
+            # Token not found — could be already rotated (stolen token reuse attempt)
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
+
         if token_record.is_revoked:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token has been revoked")
+            # Revoked token presented — old token reuse = possible theft
+            # Revoke ALL tokens for this user and force re-login
+            logger.warning(
+                f"Revoked token reuse detected for user {token_record.user_id} — "
+                f"revoking all tokens and forcing re-login"
+            )
+            await self._revoke_all_tokens_for_user(token_record.user_id)
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Security alert: refresh token reuse detected. Please sign in again."
+            )
+
         if token_record.expires_at < get_current_time():
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token expired")
 
@@ -179,6 +213,21 @@ class AuthService:
 
         ensure_user_active(user)
         return user
+
+    async def _revoke_all_tokens_for_user(self, user_id: int) -> None:
+        """Revoke all refresh tokens for a user — used when token theft is detected."""
+        try:
+            from sqlalchemy import update as sa_update
+            await self.db.execute(
+                sa_update(RefreshToken)
+                .where(RefreshToken.user_id == user_id)
+                .values(is_revoked=True)
+            )
+            await self.db.commit()
+            logger.warning(f"All refresh tokens revoked for user {user_id} due to reuse detection")
+        except Exception as e:
+            await self.db.rollback()
+            logger.error(f"Failed to revoke all tokens for user {user_id}: {e}")
 
     async def revoke_refresh_token(self, refresh_token: str) -> None:
         result = await self.db.execute(select(RefreshToken).where(RefreshToken.token == refresh_token))
@@ -196,5 +245,5 @@ class AuthService:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to revoke token")
 
         logger.info(f"Revoked refresh token for user {token_record.user_id}")
-        
+
         

@@ -56,5 +56,19 @@ def is_processing(user_id: int, domain: str) -> bool:
 def clear_task(user_id: int, domain: str) -> None:
     """Remove task from memory (optional cleanup)."""
     _tasks.pop(task_key(user_id, domain), None)
-    
-    
+    _submission_hashes.pop(task_key(user_id, domain), None)
+
+
+# --- Idempotency: submission hash tracking ---
+_submission_hashes: dict[str, str] = {}
+
+
+def set_submission_hash(user_id: int, domain: str, hash_value: str) -> None:
+    """Store the hash of the last bulk answer submission."""
+    _submission_hashes[task_key(user_id, domain)] = hash_value
+
+
+def get_submission_hash(user_id: int, domain: str) -> Optional[str]:
+    """Get the hash of the last bulk answer submission."""
+    return _submission_hashes.get(task_key(user_id, domain))
+
