@@ -52,5 +52,6 @@ class User(Base):
     images: Mapped[list[Image]] = relationship("Image", back_populates="user", cascade="all, delete-orphan")
     insights: Mapped[list[Insight]] = relationship("Insight", back_populates="user", cascade="all, delete-orphan")
     subscription: Mapped[Subscription | None] = relationship("Subscription", back_populates="user", uselist=False, cascade="all, delete-orphan")
-    refresh_token: Mapped[RefreshToken | None] = relationship("RefreshToken", back_populates="user", uselist=False, cascade="all, delete-orphan")
+    refresh_tokens: Mapped[list[RefreshToken]] = relationship("RefreshToken", back_populates="user", uselist=True, cascade="all, delete-orphan")
 
+    

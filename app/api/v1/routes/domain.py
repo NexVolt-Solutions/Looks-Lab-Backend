@@ -1,5 +1,6 @@
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, UploadFile, File, status
+from app.utils import ai_task_manager
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai.diet.food_scanner import analyze_food_image
@@ -193,13 +194,47 @@ async def submit_domain_answers_bulk(
     db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(get_current_user),
 ):
+    import hashlib, json as _json
+
     service = DomainService(db)
     validate_domain(domain)
     await service.check_domain_access(current_user.id, domain)
+
+    # Compute stable hash of this submission (sorted for consistency)
+    payload_hash = hashlib.sha256(
+        _json.dumps(
+            sorted([(a.question_id, str(a.answer)) for a in payload.answers])
+        ).encode()
+    ).hexdigest()[:16]
+
+    # Check if same payload was already submitted and AI is running/completed
+    cached_hash = ai_task_manager.get_submission_hash(current_user.id, domain)
+    existing_task = ai_task_manager.get_task(current_user.id, domain)
+
+    if cached_hash == payload_hash and existing_task:
+        if existing_task["status"] == "completed":
+            logger.info(f"Duplicate bulk submission for {domain} (user {current_user.id}) — returning cached result")
+            return existing_task["result"]
+        elif existing_task["status"] == "processing":
+            logger.info(f"Duplicate bulk submission for {domain} (user {current_user.id}) — AI still processing")
+            progress = await service.calculate_progress(domain, current_user.id)
+            return DomainFlowOut(
+                status="processing",
+                current=None,
+                next=None,
+                progress=progress,
+                redirect="processing",
+            )
+
+    # Save answers (upsert — safe to run multiple times)
     for answer in payload.answers:
         answer.user_id = current_user.id
         answer.domain = domain
         await service.save_answer(domain, answer)
+
+    # Store hash so duplicate retries are caught
+    ai_task_manager.set_submission_hash(current_user.id, domain, payload_hash)
+
     return await service.next_or_complete(current_user.id, domain)
 
 
@@ -243,5 +278,4 @@ async def retry_ai_processing(
     validate_domain(domain)
     await service.check_domain_access(current_user.id, domain)
     return await service.next_or_complete(current_user.id, domain)
-    
-    
+
