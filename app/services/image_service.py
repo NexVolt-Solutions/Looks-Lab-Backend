@@ -3,14 +3,15 @@ from typing import Optional
 
 from fastapi import HTTPException, UploadFile
 from fastapi import status as http_status
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.logging import logger
 from app.core.storage import get_storage, BaseStorage
+from app.models.ai_job import AIJob
 from app.models.image import Image, ImageStatus, ImageType
-from app.schemas.image import ImageCreate, ImageUpdate
+from app.schemas.image import ImageUpdate
 
 
 class ImageService:
@@ -27,6 +28,7 @@ class ImageService:
         view: Optional[str] = None,
         image_type: Optional[ImageType] = None,
     ) -> Image:
+        file_path: Optional[str] = None
         try:
             destination_path = BaseStorage.generate_path(
                 user_id=user_id,
@@ -76,15 +78,19 @@ class ImageService:
 
             logger.info(f"Uploaded image {image.id} for user {user_id} ({domain or 'general'}/{view or 'none'}) — {file_size / 1024:.1f}KB")
 
-            # Clear only the in-memory AI task cache so AI re-runs with new images
-            # We keep the old insight in DB for progress history
+            # Clear AI task state so the next domain flow re-runs with the new images.
+            # We keep the old insight in DB for progress history.
             if domain in ("skincare", "haircare", "facial", "fashion"):
                 try:
+                    await self.db.execute(
+                        delete(AIJob).where(AIJob.user_id == user_id, AIJob.domain == domain)
+                    )
+                    await self.db.commit()
                     from app.utils import ai_task_manager
                     ai_task_manager.clear_task(user_id, domain)
-                    logger.info(f"Cleared AI task cache for {domain} (user {user_id}) — will re-run with new images")
+                    logger.info(f"Cleared AI task state for {domain} (user {user_id}) - will re-run with new images")
                 except Exception as e:
-                    logger.warning(f"Failed to clear AI task cache for {domain} (user {user_id}): {e}")
+                    logger.warning(f"Failed to clear AI task state for {domain} (user {user_id}): {e}")
 
                 # Run quick vision analysis in background for real per-image bullets
                 import asyncio
@@ -97,6 +103,12 @@ class ImageService:
         except HTTPException:
             raise
         except Exception as e:
+            if file_path:
+                try:
+                    self._storage.delete(file_path)
+                    logger.warning(f"Rolled back uploaded file for user {user_id}: {file_path}")
+                except Exception as cleanup_error:
+                    logger.warning(f"Failed to clean up uploaded file {file_path}: {cleanup_error}")
             logger.error(f"Image upload failed for user {user_id}: {e}", exc_info=settings.is_development)
             raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Image upload failed")
 
@@ -112,6 +124,16 @@ class ImageService:
             raise HTTPException(status_code=http_status.HTTP_403_FORBIDDEN, detail="Not authorized to access this image")
 
         return image
+
+    def get_image_url(self, image: Image) -> str:
+        if image.url:
+            return image.url
+
+        storage_key = image.s3_key or image.file_path
+        if not storage_key:
+            raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail="Image URL unavailable")
+
+        return self._storage.get_url(storage_key)
 
     async def get_user_images(
         self,
@@ -184,7 +206,8 @@ class ImageService:
             async with httpx.AsyncClient(timeout=10) as client:
                 resp = await client.get(image_url)
                 if resp.status_code != 200:
-                    logger.warning(f"Quick analysis: could not fetch image {image_id}")
+                    await self._set_image_error_message(image_id, f"Quick analysis fetch failed with status {resp.status_code}")
+                    logger.warning(f"Quick analysis could not fetch image {image_id} (status={resp.status_code})")
                     return
                 image_bytes = resp.content
                 content_type = resp.headers.get("content-type", "image/jpeg")
@@ -192,7 +215,7 @@ class ImageService:
             prompt = get_quick_prompt(domain)
             image_part = {"mime_type": content_type, "data": image_bytes}
 
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
 
             def _call_gemini():
                 mdl = genai.GenerativeModel(settings.GEMINI_MODEL)
@@ -209,6 +232,7 @@ class ImageService:
             response = await loop.run_in_executor(None, _call_gemini)
 
             if not response or not response.text:
+                await self._set_image_error_message(image_id, "Quick analysis returned an empty response")
                 return
 
             text = response.text.strip()
@@ -216,6 +240,8 @@ class ImageService:
             points = data.get("points", [])
 
             if not points or not isinstance(points, list):
+                await self._set_image_error_message(image_id, "Quick analysis returned no usable preview points")
+                logger.warning(f"Quick analysis returned no usable points for image {image_id}")
                 return
 
             async with AsyncSessionLocal() as db:
@@ -224,11 +250,25 @@ class ImageService:
                 img = result.scalar_one_or_none()
                 if img and img.status == ImageStatus.processing:
                     img.analysis_result = {"points": [str(p) for p in points[:5]], "is_preview": True}
+                    img.error_message = None
                     await db.commit()
                     logger.info(f"Quick vision analysis complete for image {image_id} ({domain}) user {user_id}")
 
         except Exception as e:
+            await self._set_image_error_message(image_id, f"Quick analysis failed: {str(e)[:400]}")
             logger.warning(f"Quick analysis failed for image {image_id}: {e}")
+
+    async def _set_image_error_message(self, image_id: int, error_message: str) -> None:
+        from app.core.database import AsyncSessionLocal
+
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(select(Image).where(Image.id == image_id))
+            image = result.scalar_one_or_none()
+            if not image:
+                return
+
+            image.error_message = error_message[:512]
+            await db.commit()
 
     async def mark_failed(self, image_id: int, error_message: Optional[str] = None) -> Image:
         result = await self.db.execute(select(Image).where(Image.id == image_id))

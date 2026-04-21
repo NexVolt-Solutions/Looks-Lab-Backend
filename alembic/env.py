@@ -11,6 +11,7 @@ from app.core.config import settings
 from app.core.database import Base
 
 from app.models.user import User  # noqa: F401
+from app.models.ai_job import AIJob  # noqa: F401
 from app.models.onboarding import OnboardingSession, OnboardingQuestion, OnboardingAnswer  # noqa: F401
 from app.models.domain import DomainQuestion, DomainAnswer  # noqa: F401
 from app.models.image import Image  # noqa: F401
