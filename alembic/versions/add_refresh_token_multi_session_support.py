@@ -1,6 +1,6 @@
 """add_refresh_token_multi_session_support
 
-Revision ID: add_refresh_token_multi_session_support
+Revision ID: rt_multi_session_20260421
 Revises: add_ai_jobs_table
 Create Date: 2026-04-21 22:00:00.000000
 
@@ -10,7 +10,7 @@ from typing import Sequence, Union
 from alembic import op
 
 
-revision: str = "add_refresh_token_multi_session_support"
+revision: str = "rt_multi_session_20260421"
 down_revision: Union[str, None] = "add_ai_jobs_table"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
