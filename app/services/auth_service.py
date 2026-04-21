@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import HTTPException, status
+from sqlalchemy import delete as sa_delete
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -151,16 +152,7 @@ class AuthService:
             ))
 
             # Cleanup: delete old revoked tokens older than 30 days to prevent table bloat
-            from datetime import timedelta
-            from sqlalchemy import delete as sa_delete
-            cutoff = datetime.now(timezone.utc) - timedelta(days=30)
-            await self.db.execute(
-                sa_delete(RefreshToken).where(
-                    RefreshToken.user_id == user.id,
-                    RefreshToken.is_revoked == True,  # noqa: E712
-                    RefreshToken.updated_at < cutoff,
-                )
-            )
+            await self._cleanup_old_tokens_for_user(user.id)
             await self.db.commit()
         except Exception as e:
             await self.db.rollback()
@@ -169,8 +161,6 @@ class AuthService:
 
         await self.db.refresh(user, attribute_names=["updated_at", "subscription"])
 
-        # Clean up old revoked tokens to keep the table lean
-        await self.cleanup_old_tokens(user.id)
 
         return TokenResponse(
             user=UserOut.model_validate(user),
@@ -223,6 +213,7 @@ class AuthService:
                 .where(RefreshToken.user_id == user_id)
                 .values(is_revoked=True)
             )
+            await self._cleanup_old_tokens_for_user(user_id)
             await self.db.commit()
             logger.warning(f"All refresh tokens revoked for user {user_id} due to reuse detection")
         except Exception as e:
@@ -245,5 +236,17 @@ class AuthService:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to revoke token")
 
         logger.info(f"Revoked refresh token for user {token_record.user_id}")
+
+    async def _cleanup_old_tokens_for_user(self, user_id: int) -> None:
+        from datetime import timedelta
+
+        cutoff = datetime.now(timezone.utc) - timedelta(days=30)
+        await self.db.execute(
+            sa_delete(RefreshToken).where(
+                RefreshToken.user_id == user_id,
+                RefreshToken.is_revoked == True,  # noqa: E712
+                RefreshToken.updated_at < cutoff,
+            )
+        )
 
         

@@ -1,6 +1,5 @@
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, UploadFile, File, status
-from app.utils import ai_task_manager
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai.diet.food_scanner import analyze_food_image
@@ -208,11 +207,11 @@ async def submit_domain_answers_bulk(
     ).hexdigest()[:16]
 
     # Check if same payload was already submitted and AI is running/completed
-    cached_hash = ai_task_manager.get_submission_hash(current_user.id, domain)
-    existing_task = ai_task_manager.get_task(current_user.id, domain)
+    cached_hash = await service.get_submission_hash(current_user.id, domain)
+    existing_task = await service.get_cached_ai_task(current_user.id, domain)
 
     if cached_hash == payload_hash and existing_task:
-        if existing_task["status"] == "completed":
+        if existing_task["status"] == "completed" and existing_task["result"] is not None:
             logger.info(f"Duplicate bulk submission for {domain} (user {current_user.id}) — returning cached result")
             return existing_task["result"]
         elif existing_task["status"] == "processing":
@@ -233,9 +232,9 @@ async def submit_domain_answers_bulk(
         await service.save_answer(domain, answer)
 
     # Store hash so duplicate retries are caught
-    ai_task_manager.set_submission_hash(current_user.id, domain, payload_hash)
+    await service.remember_submission_hash(current_user.id, domain, payload_hash)
 
-    return await service.next_or_complete(current_user.id, domain)
+    return await service.next_or_complete(current_user.id, domain, submission_hash=payload_hash)
 
 
 @router.get("/{domain}/answers", response_model=DomainAnswersOut)

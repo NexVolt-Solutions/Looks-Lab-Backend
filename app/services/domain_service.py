@@ -3,14 +3,16 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from app.core.config import settings
 from app.core.logging import logger
 from app.enums import DomainEnum
+from app.models.ai_job import AIJob
 from app.models.domain import DomainAnswer, DomainQuestion
-from app.models.image import Image
+from app.models.image import Image, ImageStatus
 from app.models.onboarding import OnboardingSession
 from app.models.subscription import Subscription, SubscriptionStatus
 from app.schemas.domain import DomainAnswerCreate, DomainFlowOut, DomainProgressOut, DomainQuestionOut
@@ -61,9 +63,214 @@ AI_PROCESSORS = {
 
 
 class DomainService:
+    IMAGE_DOMAINS = ("skincare", "haircare", "facial", "fashion")
+    JOB_STATUS_PENDING = "pending"
+    JOB_STATUS_PROCESSING = "processing"
+    JOB_STATUS_COMPLETED = "completed"
+    JOB_STATUS_FAILED = "failed"
 
     def __init__(self, db: AsyncSession):
         self.db = db
+
+    async def _get_ai_job(self, user_id: int, domain: str) -> Optional[AIJob]:
+        result = await self.db.execute(
+            select(AIJob).where(AIJob.user_id == user_id, AIJob.domain == domain)
+        )
+        return result.scalar_one_or_none()
+
+    def _job_to_task(self, job: Optional[AIJob]) -> Optional[dict[str, Any]]:
+        if not job:
+            return None
+
+        result = None
+        if job.result_payload:
+            try:
+                result = DomainFlowOut.model_validate(job.result_payload)
+            except Exception as e:
+                logger.warning(f"Could not deserialize AI job result for user {job.user_id} domain {job.domain}: {e}")
+
+        return {
+            "status": job.status,
+            "result": result,
+            "error": job.error_message,
+            "submission_hash": job.submission_hash,
+        }
+
+    async def get_cached_ai_task(self, user_id: int, domain: str) -> Optional[dict[str, Any]]:
+        job = await self._get_ai_job(user_id, domain)
+        task = self._job_to_task(job)
+        if task:
+            return task
+        return ai_task_manager.get_task(user_id, domain)
+
+    async def get_submission_hash(self, user_id: int, domain: str) -> Optional[str]:
+        job = await self._get_ai_job(user_id, domain)
+        if job and job.submission_hash:
+            return job.submission_hash
+        return ai_task_manager.get_submission_hash(user_id, domain)
+
+    async def remember_submission_hash(self, user_id: int, domain: str, submission_hash: str) -> None:
+        stmt = pg_insert(AIJob).values(
+            user_id=user_id,
+            domain=domain,
+            status=self.JOB_STATUS_PENDING,
+            submission_hash=submission_hash,
+        ).on_conflict_do_update(
+            index_elements=[AIJob.user_id, AIJob.domain],
+            set_={
+                "submission_hash": submission_hash,
+                "updated_at": datetime.now(timezone.utc),
+            },
+        )
+        await self.db.execute(stmt)
+        await self.db.commit()
+        ai_task_manager.set_submission_hash(user_id, domain, submission_hash)
+
+    async def clear_ai_job(self, user_id: int, domain: str) -> None:
+        await self.db.execute(
+            delete(AIJob).where(AIJob.user_id == user_id, AIJob.domain == domain)
+        )
+        await self.db.commit()
+        ai_task_manager.clear_task(user_id, domain)
+
+    async def _mark_job_processing(self, user_id: int, domain: str, submission_hash: Optional[str] = None) -> bool:
+        if submission_hash is None:
+            existing_job = await self._get_ai_job(user_id, domain)
+            submission_hash = existing_job.submission_hash if existing_job else None
+
+        now = datetime.now(timezone.utc)
+        stmt = pg_insert(AIJob).values(
+            user_id=user_id,
+            domain=domain,
+            status=self.JOB_STATUS_PROCESSING,
+            submission_hash=submission_hash,
+            result_payload=None,
+            error_message=None,
+            started_at=now,
+            completed_at=None,
+        ).on_conflict_do_update(
+            index_elements=[AIJob.user_id, AIJob.domain],
+            set_={
+                "status": self.JOB_STATUS_PROCESSING,
+                "submission_hash": submission_hash if submission_hash is not None else AIJob.submission_hash,
+                "result_payload": None,
+                "error_message": None,
+                "started_at": now,
+                "completed_at": None,
+                "updated_at": now,
+            },
+            where=(AIJob.status != self.JOB_STATUS_PROCESSING),
+        ).returning(AIJob.id)
+
+        result = await self.db.execute(stmt)
+        await self.db.commit()
+        started = result.scalar_one_or_none() is not None
+
+        if started:
+            ai_task_manager.set_processing(user_id, domain)
+            if submission_hash:
+                ai_task_manager.set_submission_hash(user_id, domain, submission_hash)
+
+        return started
+
+    async def _mark_job_completed(self, user_id: int, domain: str, result: DomainFlowOut) -> None:
+        now = datetime.now(timezone.utc)
+        payload = result.model_dump(mode="json", exclude_none=True)
+        stmt = pg_insert(AIJob).values(
+            user_id=user_id,
+            domain=domain,
+            status=self.JOB_STATUS_COMPLETED,
+            result_payload=payload,
+            error_message=None,
+            completed_at=now,
+        ).on_conflict_do_update(
+            index_elements=[AIJob.user_id, AIJob.domain],
+            set_={
+                "status": self.JOB_STATUS_COMPLETED,
+                "result_payload": payload,
+                "error_message": None,
+                "completed_at": now,
+                "updated_at": now,
+            },
+        )
+        await self.db.execute(stmt)
+        await self.db.commit()
+        ai_task_manager.set_completed(user_id, domain, result)
+
+    async def _mark_job_failed(self, user_id: int, domain: str, error: str) -> None:
+        now = datetime.now(timezone.utc)
+        stmt = pg_insert(AIJob).values(
+            user_id=user_id,
+            domain=domain,
+            status=self.JOB_STATUS_FAILED,
+            error_message=error[:1000],
+            completed_at=now,
+        ).on_conflict_do_update(
+            index_elements=[AIJob.user_id, AIJob.domain],
+            set_={
+                "status": self.JOB_STATUS_FAILED,
+                "error_message": error[:1000],
+                "completed_at": now,
+                "updated_at": now,
+            },
+        )
+        await self.db.execute(stmt)
+        await self.db.commit()
+        ai_task_manager.set_failed(user_id, domain, error)
+
+    async def _get_processing_image_ids(self, user_id: int, domain: str) -> list[int]:
+        if domain not in self.IMAGE_DOMAINS:
+            return []
+
+        result = await self.db.execute(
+            select(Image.id).where(
+                Image.user_id == user_id,
+                Image.domain == domain,
+                Image.status == ImageStatus.processing,
+            )
+        )
+        return [image_id for (image_id,) in result.all()]
+
+    async def _mark_images_failed(self, image_ids: list[int], error: str) -> None:
+        if not image_ids:
+            return
+
+        result = await self.db.execute(
+            select(Image).where(Image.id.in_(image_ids))
+        )
+        images = result.scalars().all()
+        now = datetime.now(timezone.utc)
+        truncated_error = error[:512]
+
+        for image in images:
+            image.status = ImageStatus.failed
+            image.error_message = truncated_error
+            image.processed_at = now
+
+        await self.db.commit()
+
+    async def _reset_failed_images_for_retry(self, user_id: int, domain: str) -> None:
+        if domain not in self.IMAGE_DOMAINS:
+            return
+
+        result = await self.db.execute(
+            select(Image).where(
+                Image.user_id == user_id,
+                Image.domain == domain,
+                Image.status == ImageStatus.failed,
+            )
+        )
+        failed_images = result.scalars().all()
+
+        if not failed_images:
+            return
+
+        for image in failed_images:
+            image.status = ImageStatus.processing
+            image.error_message = None
+            image.processed_at = None
+
+        await self.db.commit()
 
     async def check_domain_access(self, user_id: int, domain: str) -> None:
         if settings.BYPASS_SUBSCRIPTION_CHECK:
@@ -178,7 +385,6 @@ class DomainService:
         ]
 
     async def reset_domain_answers(self, user_id: int, domain: str) -> None:
-        from sqlalchemy import delete
         await self.db.execute(
             delete(DomainAnswer).where(
                 DomainAnswer.user_id == user_id,
@@ -186,7 +392,7 @@ class DomainService:
             )
         )
         await self.db.commit()
-        ai_task_manager.clear_task(user_id, domain)
+        await self.clear_ai_job(user_id, domain)
         logger.info(f"Reset domain answers for {domain} (user {user_id})")
 
     async def calculate_progress(self, domain: str, user_id: int) -> DomainProgressOut:
@@ -226,7 +432,7 @@ class DomainService:
             subscription_status=subscription_status
         )
 
-    async def next_or_complete(self, user_id: int, domain: str) -> DomainFlowOut:
+    async def next_or_complete(self, user_id: int, domain: str, submission_hash: Optional[str] = None) -> DomainFlowOut:
         questions = await self.get_domain_questions(domain)
 
         result = await self.db.execute(
@@ -249,9 +455,9 @@ class DomainService:
                 )
 
         # All questions answered -> check if AI already running
-        task = ai_task_manager.get_task(user_id, domain)
+        task = await self.get_cached_ai_task(user_id, domain)
 
-        if task and task["status"] == "processing":
+        if task and task["status"] == self.JOB_STATUS_PROCESSING:
             # AI is still running -> return processing immediately
             logger.info(f"AI still processing for {domain} (user {user_id}) -- returning processing status")
             return DomainFlowOut(
@@ -262,18 +468,29 @@ class DomainService:
                 redirect="processing",
             )
 
-        if task and task["status"] == "completed":
+        if task and task["status"] == self.JOB_STATUS_COMPLETED and task["result"] is not None:
             # AI finished -> return cached result
             logger.info(f"Returning cached AI result for {domain} (user {user_id})")
             return task["result"]
 
-        if task and task["status"] == "failed":
+        if task and task["status"] == self.JOB_STATUS_FAILED:
             # Previous attempt failed -> clear and retry
-            ai_task_manager.clear_task(user_id, domain)
+            await self._reset_failed_images_for_retry(user_id, domain)
+            await self.clear_ai_job(user_id, domain)
 
         # No task running -> start AI in background, return processing immediately
-        ai_task_manager.set_processing(user_id, domain)
+        started = await self._mark_job_processing(user_id, domain, submission_hash=submission_hash)
         progress = await self.calculate_progress(domain, user_id)
+
+        if not started:
+            logger.info(f"AI already processing for {domain} (user {user_id}) -- returning processing status")
+            return DomainFlowOut(
+                status="processing",
+                current=None,
+                next=None,
+                progress=progress,
+                redirect="processing",
+            )
 
         # Launch background task (non-blocking)
         asyncio.create_task(
@@ -292,14 +509,19 @@ class DomainService:
     async def _run_ai_in_background(self, user_id: int, domain: str) -> None:
         """Runs AI processing in background with its own DB session."""
         from app.core.database import AsyncSessionLocal
+        processing_image_ids: list[int] = []
         try:
             async with AsyncSessionLocal() as db:
                 service = DomainService(db)
+                processing_image_ids = await service._get_processing_image_ids(user_id, domain)
                 result = await service._process_ai_completion(user_id, domain)
-                ai_task_manager.set_completed(user_id, domain, result)
+                await service._mark_job_completed(user_id, domain, result)
                 logger.info(f"Background AI task completed for {domain} (user {user_id})")
         except Exception as e:
-            ai_task_manager.set_failed(user_id, domain, str(e))
+            async with AsyncSessionLocal() as db:
+                service = DomainService(db)
+                await service._mark_images_failed(processing_image_ids, str(e))
+                await service._mark_job_failed(user_id, domain, str(e))
             logger.error(f"Background AI task failed for {domain} (user {user_id}): {e}", exc_info=True)
 
     _DOMAIN_ICONS: dict[str, str] = {
@@ -367,7 +589,15 @@ class DomainService:
             result = await self.db.execute(
                 select(Image).where(Image.user_id == user_id, Image.domain == domain)
             )
-            return [{"view": img.view, "url": img.url or img.s3_key} for img in result.scalars().all()]
+            return [
+                {
+                    "id": img.id,
+                    "view": img.view,
+                    "url": img.url or img.s3_key,
+                    "status": img.status,
+                }
+                for img in result.scalars().all()
+            ]
         except Exception as e:
             logger.warning(f"Could not fetch images for {domain} (user {user_id}): {e}")
             return []
@@ -457,6 +687,7 @@ class DomainService:
         progress = await self.calculate_progress(domain, user_id)
         answers_ctx = await self._get_answers_with_context(domain, user_id)
         images = await self._get_domain_images(user_id, domain)
+        image_ids_used = [img["id"] for img in images if img.get("id") is not None]
 
         config = AI_CONFIGS.get(domain)
         processor = AI_PROCESSORS.get(domain)
@@ -499,14 +730,19 @@ class DomainService:
                 try:
                     from app.models.image import Image, ImageStatus
                     from sqlalchemy import select as sa_select
-                    img_result = await self.db.execute(
-                        sa_select(Image).where(
-                            Image.user_id == user_id,
-                            Image.domain == domain,
-                            Image.status == ImageStatus.processing,
+                    if not image_ids_used:
+                        logger.info(f"No uploaded images to finalize for {domain} (user {user_id})")
+                        processing_images = []
+                    else:
+                        img_result = await self.db.execute(
+                            sa_select(Image).where(
+                                Image.id.in_(image_ids_used),
+                                Image.user_id == user_id,
+                                Image.domain == domain,
+                                Image.status == ImageStatus.processing,
+                            )
                         )
-                    )
-                    processing_images = img_result.scalars().all()
+                        processing_images = img_result.scalars().all()
 
                     # Build real bullet points from AI concerns output
                     concerns = ai_output.get("concerns", {})

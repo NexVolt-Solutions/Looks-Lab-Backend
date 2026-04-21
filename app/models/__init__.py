@@ -1,4 +1,5 @@
 from app.models.user import User
+from app.models.ai_job import AIJob
 from app.models.onboarding import OnboardingSession, OnboardingQuestion, OnboardingAnswer
 from app.models.domain import DomainQuestion, DomainAnswer
 from app.models.image import Image
