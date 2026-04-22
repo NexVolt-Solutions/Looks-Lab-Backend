@@ -71,6 +71,11 @@ setup_exception_handlers(app)
 # Static files
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
+# Operational health check used by Docker and load balancers.
+@app.get("/health", include_in_schema=False)
+async def health_check() -> dict[str, str]:
+    return {"status": "ok"}
+
 # API routes
 app.include_router(router)
 
