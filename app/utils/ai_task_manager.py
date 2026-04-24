@@ -6,7 +6,7 @@ instead of waiting 15-25 seconds for Gemini to respond.
 Key:   f"{user_id}:{domain}"
 Value: {"status": "processing"|"completed"|"failed", "result": DomainFlowOut|None, "error": str|None}
 """
-import asyncio
+import time
 from typing import Any, Optional
 
 _tasks: dict[str, dict[str, Any]] = {}
@@ -22,6 +22,7 @@ def set_processing(user_id: int, domain: str) -> None:
         "status": "processing",
         "result": None,
         "error": None,
+        "started_at": time.time(),  # Track when task started for timeout detection
     }
 
 
@@ -51,6 +52,15 @@ def get_task(user_id: int, domain: str) -> Optional[dict[str, Any]]:
 def is_processing(user_id: int, domain: str) -> bool:
     task = get_task(user_id, domain)
     return task is not None and task["status"] == "processing"
+
+
+def is_timed_out(user_id: int, domain: str, timeout_seconds: int = 90) -> bool:
+    """Check if a processing task has exceeded the timeout — detects hung Gemini calls."""
+    task = get_task(user_id, domain)
+    if not task or task["status"] != "processing":
+        return False
+    started_at = task.get("started_at", 0)
+    return (time.time() - started_at) > timeout_seconds
 
 
 def clear_task(user_id: int, domain: str) -> None:

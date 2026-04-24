@@ -15,10 +15,10 @@ limiter = Limiter(
 
 class RateLimits:
     DEFAULT = f"{settings.RATE_LIMIT_PER_MINUTE}/minute"
-    AUTH    = "10/minute"
-    AI      = "10/minute"
-    UPLOAD  = "20/minute"
-    BARCODE = "30/minute"
+    AUTH    = "20/minute"       # Login/refresh — increased for testing
+    AI      = "120/minute"      # /flow polling every 3s needs high limit
+    UPLOAD  = "60/minute"       # Image uploads — increased for testing
+    BARCODE = "30/minute"       # Barcode scan — unchanged
 
 
 def rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
@@ -42,3 +42,4 @@ def setup_rate_limiting(app) -> None:
     app.state.limiter = limiter
     app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
 
+    

@@ -79,7 +79,6 @@ class ImageService:
             logger.info(f"Uploaded image {image.id} for user {user_id} ({domain or 'general'}/{view or 'none'}) — {file_size / 1024:.1f}KB")
 
             # Clear AI task state so the next domain flow re-runs with the new images.
-            # We keep the old insight in DB for progress history.
             if domain in ("skincare", "haircare", "facial", "fashion"):
                 try:
                     await self.db.execute(
@@ -92,11 +91,18 @@ class ImageService:
                 except Exception as e:
                     logger.warning(f"Failed to clear AI task state for {domain} (user {user_id}): {e}")
 
-                # Run quick vision analysis in background for real per-image bullets
+                # Run quick vision analysis in background — keep reference to prevent GC
                 import asyncio
-                asyncio.create_task(
-                    self._run_quick_analysis(image.id, image.url or image.s3_key, domain, user_id)
-                )
+                image_url_for_analysis = image.url or ""
+                if image_url_for_analysis:
+                    _quick_task = asyncio.create_task(
+                        self._run_quick_analysis(image.id, image_url_for_analysis, domain, user_id)
+                    )
+                    _quick_task.add_done_callback(
+                        lambda t: t.exception() if not t.cancelled() else None
+                    )
+                else:
+                    logger.warning(f"No URL available for quick analysis on image {image.id}")
 
             return image
 
@@ -190,7 +196,6 @@ class ImageService:
 
         logger.info(f"Updated image {image_id} for user {user_id}")
         return image
-
 
     async def _run_quick_analysis(self, image_id: int, image_url: str, domain: str, user_id: int) -> None:
         """Run quick Gemini vision analysis on uploaded image to generate real bullets."""
@@ -301,5 +306,5 @@ class ImageService:
         await self.db.commit()
 
         logger.info(f"Deleted image {image_id} for user {user_id}")
-        
+
         
