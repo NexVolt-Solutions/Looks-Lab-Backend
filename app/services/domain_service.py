@@ -527,6 +527,28 @@ class DomainService:
         return f"https://api.lookslabai.com/static/icons/{name}.png"
 
     @staticmethod
+    def _completed_index_set(completion_record: Optional[WorkoutCompletion]) -> set[int]:
+        return set(completion_record.completed_indices or []) if completion_record else set()
+
+    @staticmethod
+    def _normalize_simple_completion_items(
+        items: list[Any],
+        completed_indices: set[int],
+        start_offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        normalized: list[dict[str, Any]] = []
+        for idx, item in enumerate(items):
+            if isinstance(item, dict):
+                normalized_item = dict(item)
+            else:
+                normalized_item = {"title": str(item)}
+
+            normalized_item.setdefault("seq", idx + 1)
+            normalized_item["completed"] = (start_offset + idx) in completed_indices
+            normalized.append(normalized_item)
+        return normalized
+
+    @staticmethod
     def _default_diet_morning_items() -> list[dict[str, Any]]:
         return [
             {
@@ -624,7 +646,7 @@ class DomainService:
             progress_tracking = _get("progress_tracking") or {}
             recovery_path = _get("recovery_path") or {}
             completion_record = await self._get_today_completion_record(user_id, domain)
-            completed_indices = set(completion_record.completed_indices or []) if completion_record else set()
+            completed_indices = self._completed_index_set(completion_record)
 
             raw_checklist = progress_tracking.get("recovery_checklist") or [
                 "Set your daily intention",
@@ -666,7 +688,7 @@ class DomainService:
             routine = _get("routine") or {}
             progress_tracking = _get("progress_tracking") or {}
             completion_record = await self._get_today_completion_record(user_id, domain)
-            completed_indices = set(completion_record.completed_indices or []) if completion_record else set()
+            completed_indices = self._completed_index_set(completion_record)
 
             today_focus = attributes.get("today_focus")
             if not isinstance(today_focus, list):
@@ -790,10 +812,23 @@ class DomainService:
 
         if domain == "workout":
             attributes = _get("attributes") or {}
+            exercises = _get("daily_exercises") or {}
             intensity = str(attributes.get("intensity", "Moderate")).lower()
             strength_map = {"low": "+5%", "moderate": "+12%", "high": "+20%"}
             strength_gain = strength_map.get(intensity, "+12%")
             progress_tracking = _get("progress_tracking") or {}
+            completion_record = await self._get_today_completion_record(user_id, domain)
+            completed_indices = self._completed_index_set(completion_record)
+            morning_exercises = self._normalize_simple_completion_items(
+                exercises.get("morning", []) if isinstance(exercises, dict) else [],
+                completed_indices,
+                0,
+            )
+            evening_exercises = self._normalize_simple_completion_items(
+                exercises.get("evening", []) if isinstance(exercises, dict) else [],
+                completed_indices,
+                len(morning_exercises),
+            )
             ai_progress = {
                 "weekly_calories": progress_tracking.get("weekly_calories", "2300"),
                 "consistency": progress_tracking.get("fitness_consistency", "85%"),
@@ -813,6 +848,98 @@ class DomainService:
                 redirect="completed_flow",
                 ai_attributes=_get("attributes"),
                 ai_progress=ai_progress,
+                ai_exercises={
+                    "morning": morning_exercises,
+                    "evening": evening_exercises,
+                },
+            )
+
+        if domain == "height":
+            exercises = _get("daily_exercises") or {}
+            completion_record = await self._get_today_completion_record(user_id, domain)
+            completed_indices = self._completed_index_set(completion_record)
+            morning_exercises = self._normalize_simple_completion_items(
+                exercises.get("morning", []) if isinstance(exercises, dict) else [],
+                completed_indices,
+                0,
+            )
+            evening_exercises = self._normalize_simple_completion_items(
+                exercises.get("evening", []) if isinstance(exercises, dict) else [],
+                completed_indices,
+                len(morning_exercises),
+            )
+            return DomainFlowOut(
+                status="completed",
+                current=None,
+                next=None,
+                progress=progress,
+                redirect="completed_flow",
+                ai_attributes=_get("attributes") or {},
+                ai_message=_get("motivational_message"),
+                ai_progress=_get("progress_tracking") or {},
+                ai_today_focus=_get("today_focus") or [],
+                ai_exercises={
+                    "morning": morning_exercises,
+                    "evening": evening_exercises,
+                },
+            )
+
+        if domain in {"skincare", "haircare"}:
+            routine = _get("routine") or {}
+            completion_record = await self._get_today_completion_record(user_id, domain)
+            completed_indices = self._completed_index_set(completion_record)
+            today_items = self._normalize_simple_completion_items(
+                routine.get("today", []) if isinstance(routine, dict) else [],
+                completed_indices,
+                0,
+            )
+            night_items = self._normalize_simple_completion_items(
+                routine.get("night", []) if isinstance(routine, dict) else [],
+                completed_indices,
+                len(today_items),
+            )
+            return DomainFlowOut(
+                status="completed",
+                current=None,
+                next=None,
+                progress=progress,
+                redirect="completed_flow",
+                ai_attributes=_get("attributes") or {},
+                ai_health=_get("health") or {},
+                ai_concerns=_get("concerns") or {},
+                ai_message=_get("motivational_message"),
+                ai_remedies=_get("remedies") or {},
+                ai_products=_get("products") or [],
+                ai_routine={
+                    "today": today_items,
+                    "night": night_items,
+                },
+            )
+
+        if domain == "facial":
+            exercises = _get("daily_exercises") or {}
+            exercise_items = exercises.get("exercises", []) if isinstance(exercises, dict) else []
+            completion_record = await self._get_today_completion_record(user_id, domain)
+            completed_indices = self._completed_index_set(completion_record)
+            normalized_exercises = self._normalize_simple_completion_items(
+                exercise_items,
+                completed_indices,
+                0,
+            )
+            return DomainFlowOut(
+                status="completed",
+                current=None,
+                next=None,
+                progress=progress,
+                redirect="completed_flow",
+                ai_attributes=_get("attributes") or {},
+                ai_message=_get("motivational_message"),
+                ai_features=_get("feature_scores") or {},
+                ai_progress=_get("progress_tracking") or {},
+                ai_exercises={
+                    "total": len(normalized_exercises),
+                    "exercises": normalized_exercises,
+                },
             )
 
         return DomainFlowOut(
