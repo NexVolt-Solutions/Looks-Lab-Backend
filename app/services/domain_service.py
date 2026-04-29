@@ -18,6 +18,7 @@ from app.schemas.insight import InsightCreate
 from app.services.insight_service import InsightService
 from app.services.progress_service import ProgressService
 from app.utils import ai_task_manager
+from app.utils.domain_score_utils import extract_domain_score
 
 from app.ai.skin_care.processor import analyze_skincare
 from app.ai.skin_care.config import SkincareAIConfig
@@ -380,65 +381,7 @@ class DomainService:
             return []
 
     def _extract_score(self, domain: str, ai_output: dict) -> Optional[float]:
-        if not ai_output:
-            return None
-
-        # For workout: derive score from intensity
-        if domain == "workout":
-            attributes = ai_output.get("attributes", {})
-            if isinstance(attributes, dict):
-                intensity = str(attributes.get("intensity", "")).lower()
-                intensity_score_map = {"low": 40.0, "moderate": 65.0, "high": 85.0}
-                return intensity_score_map.get(intensity, 60.0)
-
-        # For quit_porn: derive score from progress_tracking.recovery_score
-        if domain == "quit_porn":
-            progress = ai_output.get("progress_tracking", {})
-            if isinstance(progress, dict):
-                raw = str(progress.get("recovery_score", "")).replace("%", "").replace("+", "").strip()
-                try:
-                    return min(max(float(raw), 0.0), 100.0)
-                except ValueError:
-                    return 50.0
-
-        score_field_map = {
-            "skincare":  "health_score",
-            "haircare":  "health_score",
-            "facial":    "health_score",
-            "diet":      "health_score",
-            "height":    "health_score",
-            "fashion":   "health_score",
-        }
-
-        field = score_field_map.get(domain, "health_score")
-        score = ai_output.get(field)
-
-        if score is None:
-            health = ai_output.get("health", {})
-            if isinstance(health, dict):
-                score = health.get("score") or health.get("health_score") or health.get("overall_score")
-
-        if score is None:
-            attributes = ai_output.get("attributes", {})
-            if isinstance(attributes, dict):
-                score = attributes.get("overall_score") or attributes.get("score")
-
-        if score is None:
-            progress = ai_output.get("progress_tracking", {})
-            if isinstance(progress, dict):
-                raw = str(progress.get("recovery_score", "")).replace("%", "").strip()
-                try:
-                    score = float(raw) if raw else None
-                except ValueError:
-                    pass
-
-        if score is not None:
-            try:
-                return min(max(float(score), 0.0), 100.0)
-            except (TypeError, ValueError):
-                return None
-
-        return None
+        return extract_domain_score(domain, ai_output)
 
     async def _process_ai_completion(self, user_id: int, domain: str) -> DomainFlowOut:
         progress = await self.calculate_progress(domain, user_id)
