@@ -52,12 +52,6 @@ class WorkoutCompletionService:
         )
 
     async def save_completion(self, user_id: int, payload: WorkoutCompletionSave, domain: str = "workout") -> WorkoutCompletionOut:
-        total = max(int(payload.total_exercises or 0), 0)
-        completed_indices = self._normalize_indices(payload.completed_indices, total) if total > 0 else []
-        recovery_indices = self._normalize_indices(payload.recovery_completed_indices, 4) if domain == "workout" else []
-        completed_count = len(completed_indices)
-        score = round((completed_count / total) * 100, 1) if total > 0 else 0.0
-
         result = await self.db.execute(
             select(WorkoutCompletion).where(
                 WorkoutCompletion.user_id == user_id,
@@ -66,6 +60,13 @@ class WorkoutCompletionService:
             )
         )
         existing = result.scalar_one_or_none()
+
+        requested_total = max(int(payload.total_exercises or 0), 0)
+        total = existing.total_exercises if existing and existing.total_exercises > 0 else requested_total
+        completed_indices = self._normalize_indices(payload.completed_indices, total) if total > 0 else []
+        recovery_indices = self._normalize_indices(payload.recovery_completed_indices, 4) if domain == "workout" else []
+        completed_count = len(completed_indices)
+        score = round((completed_count / total) * 100, 1) if total > 0 else 0.0
 
         if existing:
             existing.completed_indices = completed_indices
