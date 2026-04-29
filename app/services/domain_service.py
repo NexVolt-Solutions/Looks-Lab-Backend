@@ -526,6 +526,58 @@ class DomainService:
     def _diet_icon_url(name: str) -> str:
         return f"https://api.lookslabai.com/static/icons/{name}.png"
 
+    @staticmethod
+    def _default_diet_morning_items() -> list[dict[str, Any]]:
+        return [
+            {
+                "seq": 1,
+                "title": "Breakfast",
+                "subtitle": "Oatmeal with fruits & nuts",
+                "description": "Balanced carbs + fiber for stable morning energy.",
+                "duration": "10 min",
+            },
+            {
+                "seq": 2,
+                "title": "Morning Snack",
+                "subtitle": "Yogurt or smoothie",
+                "description": "Add protein to reduce cravings before lunch.",
+                "duration": "5 min",
+            },
+            {
+                "seq": 3,
+                "title": "Hydration",
+                "subtitle": "Drink 1 glass of water",
+                "description": "Start hydration early to improve digestion and focus.",
+                "duration": "1 min",
+            },
+        ]
+
+    @staticmethod
+    def _default_diet_evening_items() -> list[dict[str, Any]]:
+        return [
+            {
+                "seq": 1,
+                "title": "Lunch",
+                "subtitle": "Balanced plate: protein + veggies + carbs",
+                "description": "Keep portions steady and avoid sugary drinks.",
+                "duration": "20 min",
+            },
+            {
+                "seq": 2,
+                "title": "Afternoon Snack",
+                "subtitle": "Fruit or nuts",
+                "description": "Use whole foods to avoid evening overeating.",
+                "duration": "5 min",
+            },
+            {
+                "seq": 3,
+                "title": "Dinner",
+                "subtitle": "Light, easy-to-digest meal",
+                "description": "Prefer early dinner and lower heavy fats late night.",
+                "duration": "20 min",
+            },
+        ]
+
     @classmethod
     def _normalize_diet_plan_items(
         cls,
@@ -632,6 +684,10 @@ class DomainService:
 
             morning_items_raw = routine.get("morning") if isinstance(routine.get("morning"), list) else []
             evening_items_raw = routine.get("evening") if isinstance(routine.get("evening"), list) else []
+            if not morning_items_raw:
+                morning_items_raw = self._default_diet_morning_items()
+            if not evening_items_raw:
+                evening_items_raw = self._default_diet_evening_items()
             morning_items = self._normalize_diet_plan_items(morning_items_raw, completed_indices, 0)
             evening_items = self._normalize_diet_plan_items(evening_items_raw, completed_indices, len(morning_items))
 
