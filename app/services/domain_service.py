@@ -600,6 +600,35 @@ class DomainService:
             },
         ]
 
+    @staticmethod
+    def _default_diet_today_focus() -> list[str]:
+        return [
+            "Build Muscle",
+            "Maintenance",
+            "Clean & Energetic Diet",
+            "Fatloss",
+        ]
+
+    @staticmethod
+    def _default_diet_nutrition_targets() -> dict[str, Any]:
+        return {
+            "daily_calories": 2000,
+            "protein_g": 120,
+            "carbs_g": 200,
+            "fat_g": 65,
+            "water_glasses": 8,
+            "fiber_g": 25,
+        }
+
+    @staticmethod
+    def _default_diet_recovery_checklist() -> list[str]:
+        return [
+            "Ate all planned meals",
+            "Drank at least 8 glasses of water",
+            "Included fruits & vegetables",
+            "Took rest if needed",
+        ]
+
     @classmethod
     def _normalize_diet_plan_items(
         cls,
@@ -693,6 +722,13 @@ class DomainService:
             today_focus = attributes.get("today_focus")
             if not isinstance(today_focus, list):
                 today_focus = []
+            if not today_focus:
+                today_focus = self._default_diet_today_focus()
+
+            if not isinstance(nutrition, dict):
+                nutrition = {}
+            if not nutrition:
+                nutrition = self._default_diet_nutrition_targets()
 
             calories_value = str(attributes.get("calories_intake") or nutrition.get("daily_calories") or progress_tracking.get("daily_calories") or "0")
             calories_numeric = str(int(self._extract_number(calories_value, 0.0)))
@@ -716,6 +752,8 @@ class DomainService:
             checklist_raw = progress_tracking.get("recovery_checklist")
             if not isinstance(checklist_raw, list):
                 checklist_raw = []
+            if not checklist_raw:
+                checklist_raw = self._default_diet_recovery_checklist()
             checklist_items = []
             checklist_offset = len(morning_items) + len(evening_items)
             for idx, title in enumerate(checklist_raw[:4]):
