@@ -80,6 +80,9 @@ class DomainFlowOut(BaseModel):
     ai_nutrition: Optional[dict[str, Any]] = None
     ai_recovery: Optional[dict[str, Any]] = None
     ai_features: Optional[dict[str, Any]] = None
+    ai_summary: Optional[dict[str, Any]] = None
+    daily_plan: Optional[dict[str, Any]] = None
+    progress_screen: Optional[dict[str, Any]] = None
 
     model_config = ConfigDict(populate_by_name=True)
 
