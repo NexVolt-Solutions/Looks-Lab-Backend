@@ -284,8 +284,15 @@ class DomainService:
 
         if task and task["status"] == "completed":
             # AI finished -> return cached result
-            logger.info(f"Returning cached AI result for {domain} (user {user_id})")
-            return task["result"]
+            if task.get("result") is not None:
+                logger.info(f"Returning cached AI result for {domain} (user {user_id})")
+                return task["result"]
+
+            logger.warning(f"Completed AI task had no result for {domain} (user {user_id}) — clearing and rebuilding state")
+            ai_task_manager.clear_task(user_id, domain)
+            fresh_ai_output = await self._get_fresh_completed_ai_output(user_id, domain)
+            if fresh_ai_output:
+                return await self._build_completed_flow(user_id, domain, progress, fresh_ai_output)
 
         if task and task["status"] == "failed":
             # Previous attempt failed -> clear and retry
