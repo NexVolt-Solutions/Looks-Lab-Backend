@@ -15,6 +15,23 @@ class WorkoutCompletionService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
+    @staticmethod
+    def _normalize_indices(indices: list[int], total_exercises: int) -> list[int]:
+        normalized: list[int] = []
+        seen: set[int] = set()
+
+        for value in indices or []:
+            if not isinstance(value, int):
+                continue
+            if value < 0 or value >= total_exercises:
+                continue
+            if value in seen:
+                continue
+            seen.add(value)
+            normalized.append(value)
+
+        return sorted(normalized)
+
     async def get_completion(self, user_id: int, target_date: date, domain: str = "workout") -> Optional[WorkoutCompletionOut]:
         result = await self.db.execute(
             select(WorkoutCompletion).where(
@@ -31,12 +48,14 @@ class WorkoutCompletionService:
             completed_indices=record.completed_indices or [],
             total_exercises=record.total_exercises,
             score=record.score,
-            recovery_completed_indices=record.recovery_completed_indices or [],
+            recovery_completed_indices=(record.recovery_completed_indices or []) if domain == "workout" else [],
         )
 
     async def save_completion(self, user_id: int, payload: WorkoutCompletionSave, domain: str = "workout") -> WorkoutCompletionOut:
-        total = payload.total_exercises or 6
-        completed_count = len(payload.completed_indices)
+        total = max(int(payload.total_exercises or 0), 0)
+        completed_indices = self._normalize_indices(payload.completed_indices, total) if total > 0 else []
+        recovery_indices = self._normalize_indices(payload.recovery_completed_indices, 4) if domain == "workout" else []
+        completed_count = len(completed_indices)
         score = round((completed_count / total) * 100, 1) if total > 0 else 0.0
 
         result = await self.db.execute(
@@ -49,29 +68,29 @@ class WorkoutCompletionService:
         existing = result.scalar_one_or_none()
 
         if existing:
-            existing.completed_indices = payload.completed_indices
+            existing.completed_indices = completed_indices
             existing.total_exercises = total
             existing.score = score
-            existing.recovery_completed_indices = payload.recovery_completed_indices or []
+            existing.recovery_completed_indices = recovery_indices
         else:
             self.db.add(WorkoutCompletion(
                 user_id=user_id,
                 domain=domain,
                 date=payload.date,
-                completed_indices=payload.completed_indices,
+                completed_indices=completed_indices,
                 total_exercises=total,
                 score=score,
-                recovery_completed_indices=payload.recovery_completed_indices or [],
+                recovery_completed_indices=recovery_indices,
             ))
 
         await self.db.commit()
-        logger.info(f"Workout completion saved for user {user_id} date={payload.date} score={score}")
+        logger.info(f"Workout completion saved for user {user_id} domain={domain} date={payload.date} score={score}")
         return WorkoutCompletionOut(
             date=payload.date,
-            completed_indices=payload.completed_indices,
+            completed_indices=completed_indices,
             total_exercises=total,
             score=score,
-            recovery_completed_indices=payload.recovery_completed_indices or [],
+            recovery_completed_indices=recovery_indices,
         )
 
     async def get_weekly_summary(self, user_id: int) -> WeeklyWorkoutSummaryOut:
