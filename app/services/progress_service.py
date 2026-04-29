@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.logging import logger
 from app.models.domain_score_history import DomainScoreHistory
 from app.models.insight import Insight
+from app.models.workout_completion import WorkoutCompletion
 from app.schemas.progress import DomainScorePoint, DomainProgressSeries, ProgressGraphOut
 from app.utils.domain_score_utils import extract_domain_score
 
@@ -182,7 +183,48 @@ class ProgressService:
             overall_change=overall_change,
         )
 
+    async def _get_completion_backed_domain_progress_graph(self, user_id: int, domain: str, period: str) -> dict:
+        days = _PERIOD_DAYS.get(period, 7)
+        since_date = (datetime.now(timezone.utc) - timedelta(days=days)).date()
+
+        result = await self.db.execute(
+            select(WorkoutCompletion)
+            .where(
+                WorkoutCompletion.user_id == user_id,
+                WorkoutCompletion.domain == domain,
+                WorkoutCompletion.date >= since_date,
+            )
+            .order_by(WorkoutCompletion.date.asc(), WorkoutCompletion.recorded_at.asc())
+        )
+        records = result.scalars().all()
+
+        scores = [
+            {
+                "domain": domain,
+                "score": round(record.score, 1),
+                "recorded_at": record.recorded_at,
+            }
+            for record in records
+        ]
+
+        first_score = round(records[0].score, 1) if records else 0.0
+        latest_score = round(records[-1].score, 1) if records else 0.0
+        change = round(latest_score - first_score, 1) if records else 0.0
+
+        return {
+            "period": period,
+            "domain": domain,
+            "icon_url": _DOMAIN_ICONS.get(domain),
+            "first_score": first_score,
+            "latest_score": latest_score,
+            "change": change,
+            "scores": scores,
+        }
+
     async def get_domain_progress_graph(self, user_id: int, domain: str, period: str) -> dict:
+        if domain == "quit_porn":
+            return await self._get_completion_backed_domain_progress_graph(user_id, domain, period)
+
         graph = await self.get_progress_graph(user_id, period)
         domain_data = next((d for d in graph.domains if d.domain == domain), None)
         if not domain_data:

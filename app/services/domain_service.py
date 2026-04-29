@@ -1,5 +1,5 @@
 import asyncio
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Any, Optional
 
 from fastapi import HTTPException, status
@@ -11,8 +11,10 @@ from app.core.logging import logger
 from app.enums import DomainEnum
 from app.models.domain import DomainAnswer, DomainQuestion
 from app.models.image import Image
+from app.models.insight import Insight
 from app.models.onboarding import OnboardingSession
 from app.models.subscription import Subscription, SubscriptionStatus
+from app.models.workout_completion import WorkoutCompletion
 from app.schemas.domain import DomainAnswerCreate, DomainFlowOut, DomainProgressOut, DomainQuestionOut
 from app.schemas.insight import InsightCreate
 from app.services.insight_service import InsightService
@@ -249,6 +251,12 @@ class DomainService:
                     progress=await self.calculate_progress(domain, user_id),
                 )
 
+        progress = await self.calculate_progress(domain, user_id)
+        fresh_ai_output = await self._get_fresh_completed_ai_output(user_id, domain)
+        if fresh_ai_output:
+            logger.info(f"Returning persisted completed flow for {domain} (user {user_id})")
+            return await self._build_completed_flow(user_id, domain, progress, fresh_ai_output)
+
         # All questions answered -> check if AI already running
         task = ai_task_manager.get_task(user_id, domain)
 
@@ -265,7 +273,7 @@ class DomainService:
                     status="processing",
                     current=None,
                     next=None,
-                    progress=await self.calculate_progress(domain, user_id),
+                    progress=progress,
                     redirect="processing",
                 )
 
@@ -280,12 +288,40 @@ class DomainService:
 
         # No task running -> start AI in background, return processing immediately
         ai_task_manager.set_processing(user_id, domain)
-        progress = await self.calculate_progress(domain, user_id)
 
         # Launch background task (non-blocking) — keep reference to prevent GC
         _bg_task = asyncio.create_task(
             self._run_ai_in_background(user_id, domain)
         )
+
+    async def _get_fresh_completed_ai_output(self, user_id: int, domain: str) -> Optional[dict[str, Any]]:
+        insight_result = await self.db.execute(
+            select(Insight)
+            .where(
+                Insight.user_id == user_id,
+                Insight.category == domain,
+            )
+            .order_by(Insight.updated_at.desc(), Insight.created_at.desc())
+            .limit(1)
+        )
+        insight = insight_result.scalar_one_or_none()
+        if not insight or not isinstance(insight.content, dict):
+            return None
+
+        answer_result = await self.db.execute(
+            select(DomainAnswer)
+            .where(
+                DomainAnswer.user_id == user_id,
+                DomainAnswer.domain == domain,
+            )
+            .order_by(DomainAnswer.updated_at.desc())
+            .limit(1)
+        )
+        latest_answer = answer_result.scalar_one_or_none()
+        if latest_answer and latest_answer.updated_at and latest_answer.updated_at > insight.updated_at:
+            return None
+
+        return insight.content
         _bg_task.add_done_callback(lambda t: t.exception() if not t.cancelled() else None)
 
         logger.info(f"AI background task started for {domain} (user {user_id}) -- returning processing status")
@@ -383,6 +419,163 @@ class DomainService:
     def _extract_score(self, domain: str, ai_output: dict) -> Optional[float]:
         return extract_domain_score(domain, ai_output)
 
+    async def _get_today_completion_record(self, user_id: int, domain: str) -> Optional[WorkoutCompletion]:
+        result = await self.db.execute(
+            select(WorkoutCompletion).where(
+                WorkoutCompletion.user_id == user_id,
+                WorkoutCompletion.domain == domain,
+                WorkoutCompletion.date == date.today(),
+            )
+        )
+        return result.scalar_one_or_none()
+
+    @staticmethod
+    def _normalize_quit_porn_checklist(items: list[Any], completed_indices: set[int]) -> list[dict[str, Any]]:
+        normalized = []
+        for idx, item in enumerate(items):
+            title = item.get("title") if isinstance(item, dict) else str(item)
+            description = item.get("description", "") if isinstance(item, dict) else ""
+            duration = item.get("duration", "") if isinstance(item, dict) else ""
+            normalized.append({
+                "seq": idx + 1,
+                "title": title or f"Checklist Item {idx + 1}",
+                "subtitle": description,
+                "description": description,
+                "duration": duration,
+                "completed": idx in completed_indices,
+            })
+        return normalized
+
+    @staticmethod
+    def _normalize_quit_porn_daily_tasks(
+        items: list[Any],
+        completed_indices: set[int],
+        checklist_count: int,
+    ) -> list[dict[str, Any]]:
+        normalized = []
+        for idx, item in enumerate(items):
+            if isinstance(item, dict):
+                title = item.get("title", "")
+                description = item.get("description", "")
+                duration = item.get("duration", "")
+                existing_completed = bool(item.get("completed", False))
+                seq = item.get("seq", idx + 1)
+            else:
+                title = str(item)
+                description = ""
+                duration = ""
+                existing_completed = False
+                seq = idx + 1
+
+            normalized.append({
+                "seq": seq,
+                "title": title or f"Task {idx + 1}",
+                "subtitle": description,
+                "description": description,
+                "duration": duration,
+                "completed": (checklist_count + idx) in completed_indices or existing_completed,
+            })
+        return normalized
+
+    async def _build_completed_flow(
+        self,
+        user_id: int,
+        domain: str,
+        progress: DomainProgressOut,
+        ai_output: Optional[dict[str, Any]],
+    ) -> DomainFlowOut:
+        def _get(key: str) -> Optional[Any]:
+            return ai_output.get(key) if ai_output else None
+
+        if domain == "quit_porn":
+            progress_tracking = _get("progress_tracking") or {}
+            recovery_path = _get("recovery_path") or {}
+            completion_record = await self._get_today_completion_record(user_id, domain)
+            completed_indices = set(completion_record.completed_indices or []) if completion_record else set()
+
+            raw_checklist = progress_tracking.get("recovery_checklist") or [
+                "Set your daily intention",
+                "Evening reflection",
+                "Productive alone time",
+                "Connect with someone",
+            ]
+            checklist_items = self._normalize_quit_porn_checklist(raw_checklist, completed_indices)
+
+            raw_daily_tasks = recovery_path.get("daily_tasks") or []
+            daily_tasks = self._normalize_quit_porn_daily_tasks(raw_daily_tasks, completed_indices, len(checklist_items))
+            streak = recovery_path.get("streak") or {
+                "current_streak": 0,
+                "longest_streak": 0,
+                "next_goal": 7,
+                "streak_message": "Today is day one. Let's make it count!",
+            }
+
+            return DomainFlowOut(
+                status="completed",
+                redirect="completed_flow",
+                progress=progress,
+                ai_attributes=_get("attributes"),
+                ai_message=_get("motivational_message"),
+                ai_progress={
+                    "consistency": progress_tracking.get("consistency", "42%"),
+                    "recovery_score": progress_tracking.get("recovery_score", "58%"),
+                    "recovery_checklist": checklist_items,
+                },
+                ai_recovery={
+                    "streak": streak,
+                    "daily_tasks": daily_tasks,
+                },
+            )
+
+        if domain == "workout":
+            attributes = _get("attributes") or {}
+            intensity = str(attributes.get("intensity", "Moderate")).lower()
+            strength_map = {"low": "+5%", "moderate": "+12%", "high": "+20%"}
+            strength_gain = strength_map.get(intensity, "+12%")
+            progress_tracking = _get("progress_tracking") or {}
+            ai_progress = {
+                "weekly_calories": progress_tracking.get("weekly_calories", "2300"),
+                "consistency": progress_tracking.get("fitness_consistency", "85%"),
+                "strength_gain": strength_gain,
+                "fitness_consistency": progress_tracking.get("fitness_consistency", "85%"),
+                "calorie_balance": "85%",
+                "hydration": "85%",
+                "recovery_checklist": [
+                    "Got 7+ hours of sleep",
+                    "Drank 8+ glasses of water",
+                    "Stretched for 10 minutes",
+                    "Took a rest if needed",
+                ],
+            }
+            return DomainFlowOut(
+                status="completed",
+                redirect="completed_flow",
+                ai_attributes=_get("attributes"),
+                ai_progress=ai_progress,
+            )
+
+        return DomainFlowOut(
+            status="completed",
+            current=None,
+            next=None,
+            progress=progress,
+            redirect="completed_flow",
+            ai_attributes=_get("attributes"),
+            ai_health=_get("health"),
+            ai_concerns=_get("concerns"),
+            ai_message=_get("motivational_message"),
+            ai_remedies=_get("remedies"),
+            ai_products=_get("products"),
+            ai_routine=_get("routine"),
+            ai_exercises=_get("daily_exercises"),
+            ai_progress=_get("progress_tracking"),
+            ai_today_focus=_get("today_focus"),
+            ai_workout_summary=_get("workout_summary"),
+            ai_nutrition=_get("nutrition_targets"),
+            ai_recovery=_get("recovery_path"),
+            ai_features=_get("feature_scores"),
+        )
+
     async def _process_ai_completion(self, user_id: int, domain: str) -> DomainFlowOut:
         progress = await self.calculate_progress(domain, user_id)
         answers_ctx = await self._get_answers_with_context(domain, user_id)
@@ -464,90 +657,6 @@ class DomainService:
                 except Exception as e:
                     logger.error(f"Failed to update image status for {domain} (user {user_id}): {e}", exc_info=settings.is_development)
 
-        def _get(key: str) -> Optional[Any]:
-            return ai_output.get(key) if ai_output else None
-
-        if domain == "quit_porn":
-            progress_tracking = _get("progress_tracking") or {}
-            recovery_path = _get("recovery_path") or {}
-            # Ensure daily_tasks is always a list
-            daily_tasks = recovery_path.get("daily_tasks") or []
-            streak = recovery_path.get("streak") or {
-                "current_streak": 0,
-                "longest_streak": 0,
-                "next_goal": 7,
-                "streak_message": "Today is day one. Let's make it count!"
-            }
-            return DomainFlowOut(
-                status="completed",
-                redirect="completed_flow",
-                progress=progress,
-                ai_attributes=_get("attributes"),
-                ai_message=_get("motivational_message"),
-                ai_progress={
-                    "consistency": progress_tracking.get("consistency", "42%"),
-                    "recovery_score": progress_tracking.get("recovery_score", "58%"),
-                    "recovery_checklist": progress_tracking.get("recovery_checklist") or [
-                        "Set your daily intention",
-                        "Evening reflection",
-                        "Productive alone time",
-                        "Connect with someone",
-                    ],
-                },
-                ai_recovery={
-                    "streak": streak,
-                    "daily_tasks": daily_tasks,
-                },
-            )
-
-        if domain == "workout":
-            # Build ai_progress with AI values + static recovery checklist labels
-            attributes = _get("attributes") or {}
-            intensity = str(attributes.get("intensity", "Moderate")).lower()
-            strength_map = {"low": "+5%", "moderate": "+12%", "high": "+20%"}
-            strength_gain = strength_map.get(intensity, "+12%")
-            progress_tracking = _get("progress_tracking") or {}
-            ai_progress = {
-                "weekly_calories": progress_tracking.get("weekly_calories", "2300"),
-                "consistency": progress_tracking.get("fitness_consistency", "85%"),
-                "strength_gain": strength_gain,
-                "fitness_consistency": progress_tracking.get("fitness_consistency", "85%"),
-                "calorie_balance": "85%",
-                "hydration": "85%",
-                "recovery_checklist": [
-                    "Got 7+ hours of sleep",
-                    "Drank 8+ glasses of water",
-                    "Stretched for 10 minutes",
-                    "Took a rest if needed",
-                ],
-            }
-            return DomainFlowOut(
-                status="completed",
-                redirect="completed_flow",
-                ai_attributes=_get("attributes"),
-                ai_progress=ai_progress,
-            )
-
-        return DomainFlowOut(
-            status="completed",
-            current=None,
-            next=None,
-            progress=progress,
-            redirect="completed_flow",
-            ai_attributes=_get("attributes"),
-            ai_health=_get("health"),
-            ai_concerns=_get("concerns"),
-            ai_message=_get("motivational_message"),
-            ai_remedies=_get("remedies"),
-            ai_products=_get("products"),
-            ai_routine=_get("routine"),
-            ai_exercises=_get("daily_exercises"),
-            ai_progress=_get("progress_tracking"),
-            ai_today_focus=_get("today_focus"),
-            ai_workout_summary=_get("workout_summary"),
-            ai_nutrition=_get("nutrition_targets"),
-            ai_recovery=_get("recovery_path"),
-            ai_features=_get("feature_scores"),
-        )
+        return await self._build_completed_flow(user_id, domain, progress, ai_output)
     
     
