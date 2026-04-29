@@ -229,7 +229,12 @@ class DomainService:
             subscription_status=subscription_status
         )
 
-    async def next_or_complete(self, user_id: int, domain: str) -> DomainFlowOut:
+    async def next_or_complete(
+        self,
+        user_id: int,
+        domain: str,
+        submission_hash: Optional[str] = None,
+    ) -> DomainFlowOut:
         questions = await self.get_domain_questions(domain)
 
         result = await self.db.execute(
@@ -293,6 +298,16 @@ class DomainService:
         _bg_task = asyncio.create_task(
             self._run_ai_in_background(user_id, domain)
         )
+        _bg_task.add_done_callback(lambda t: t.exception() if not t.cancelled() else None)
+
+        logger.info(f"AI background task started for {domain} (user {user_id}) -- returning processing status")
+        return DomainFlowOut(
+            status="processing",
+            current=None,
+            next=None,
+            progress=progress,
+            redirect="processing",
+        )
 
     async def _get_fresh_completed_ai_output(self, user_id: int, domain: str) -> Optional[dict[str, Any]]:
         insight_result = await self.db.execute(
@@ -322,16 +337,6 @@ class DomainService:
             return None
 
         return insight.content
-        _bg_task.add_done_callback(lambda t: t.exception() if not t.cancelled() else None)
-
-        logger.info(f"AI background task started for {domain} (user {user_id}) -- returning processing status")
-        return DomainFlowOut(
-            status="processing",
-            current=None,
-            next=None,
-            progress=progress,
-            redirect="processing",
-        )
 
     async def _run_ai_in_background(self, user_id: int, domain: str) -> None:
         """Runs AI processing in background with its own DB session."""
@@ -477,6 +482,75 @@ class DomainService:
             })
         return normalized
 
+    @staticmethod
+    def _extract_number(value: Any, default: float = 0.0) -> float:
+        import re
+
+        if isinstance(value, (int, float)):
+            return float(value)
+        if isinstance(value, str):
+            match = re.search(r"-?\d+(?:\.\d+)?", value.replace(",", ""))
+            if match:
+                try:
+                    return float(match.group(0))
+                except ValueError:
+                    return default
+        return default
+
+    @classmethod
+    def _extract_percent(cls, value: Any, default: float = 0.0) -> float:
+        return max(0.0, min(100.0, cls._extract_number(value, default)))
+
+    @classmethod
+    def _extract_calorie_balance_percent(cls, value: Any) -> float:
+        if not isinstance(value, str) or "/" not in value:
+            return cls._extract_percent(value, 0.0)
+        try:
+            consumed_raw, target_raw = value.split("/", 1)
+            consumed = cls._extract_number(consumed_raw.strip(), 0.0)
+            target = cls._extract_number(target_raw.strip(), 0.0)
+            if target <= 0:
+                return 0.0
+            return max(0.0, min(100.0, round((consumed / target) * 100, 1)))
+        except Exception:
+            return 0.0
+
+    @staticmethod
+    def _diet_icon_url(name: str) -> str:
+        return f"https://api.lookslabai.com/static/icons/{name}.png"
+
+    @classmethod
+    def _normalize_diet_plan_items(
+        cls,
+        items: list[Any],
+        completed_indices: set[int],
+        start_offset: int,
+    ) -> list[dict[str, Any]]:
+        normalized: list[dict[str, Any]] = []
+        for idx, item in enumerate(items):
+            if isinstance(item, dict):
+                title = item.get("title", "")
+                description = item.get("description", "")
+                subtitle = item.get("subtitle") or item.get("time") or ""
+                duration = item.get("duration") or item.get("time") or ""
+                seq = item.get("seq", idx + 1)
+            else:
+                title = str(item)
+                description = ""
+                subtitle = ""
+                duration = ""
+                seq = idx + 1
+
+            normalized.append({
+                "seq": seq,
+                "title": title,
+                "subtitle": subtitle,
+                "description": description,
+                "duration": duration,
+                "completed": (start_offset + idx) in completed_indices,
+            })
+        return normalized
+
     async def _build_completed_flow(
         self,
         user_id: int,
@@ -525,6 +599,130 @@ class DomainService:
                     "streak": streak,
                     "daily_tasks": daily_tasks,
                 },
+            )
+
+        if domain == "diet":
+            attributes = _get("attributes") or {}
+            nutrition = _get("nutrition_targets") or {}
+            routine = _get("routine") or {}
+            progress_tracking = _get("progress_tracking") or {}
+            completion_record = await self._get_today_completion_record(user_id, domain)
+            completed_indices = set(completion_record.completed_indices or []) if completion_record else set()
+
+            today_focus = attributes.get("today_focus")
+            if not isinstance(today_focus, list):
+                today_focus = []
+
+            calories_value = str(attributes.get("calories_intake") or nutrition.get("daily_calories") or progress_tracking.get("daily_calories") or "0")
+            calories_numeric = str(int(self._extract_number(calories_value, 0.0)))
+            activity_level = str(attributes.get("activity") or attributes.get("activity_level") or "Moderate")
+            posture_insight = str(attributes.get("posture_insight") or "Consistency improves energy, digestion & overall health over time. Keep going!")
+
+            meals_summary = attributes.get("meals_summary") if isinstance(attributes.get("meals_summary"), dict) else {}
+            total_meals = int(meals_summary.get("total_meals", 0) or 0)
+            total_snacks = int(meals_summary.get("total_snacks", 0) or 0)
+            prep_time_min = int(meals_summary.get("prep_time_min", 0) or 0)
+
+            morning_items_raw = routine.get("morning") if isinstance(routine.get("morning"), list) else []
+            evening_items_raw = routine.get("evening") if isinstance(routine.get("evening"), list) else []
+            morning_items = self._normalize_diet_plan_items(morning_items_raw, completed_indices, 0)
+            evening_items = self._normalize_diet_plan_items(evening_items_raw, completed_indices, len(morning_items))
+
+            checklist_raw = progress_tracking.get("recovery_checklist")
+            if not isinstance(checklist_raw, list):
+                checklist_raw = []
+            checklist_items = []
+            checklist_offset = len(morning_items) + len(evening_items)
+            for idx, title in enumerate(checklist_raw[:4]):
+                checklist_items.append({
+                    "seq": idx + 1,
+                    "title": str(title),
+                    "completed": (checklist_offset + idx) in completed_indices,
+                })
+
+            diet_consistency_percent = self._extract_percent(progress_tracking.get("diet_consistency"), 0.0)
+            calorie_balance_percent = self._extract_calorie_balance_percent(progress_tracking.get("calorie_balance"))
+
+            return DomainFlowOut(
+                status="completed",
+                redirect="completed_flow",
+                progress=progress,
+                ai_message=str(_get("motivational_message") or "Small daily diet improvements create long-term healthy habits. You're doing great-keep up the momentum!"),
+                ai_attributes={
+                    "today_focus": [str(item) for item in today_focus[:4]],
+                    "activity_level": activity_level,
+                },
+                ai_summary={
+                    "subtitle": "Improve strength & track your workout progress",
+                    "cards": [
+                        {
+                            "key": "calories",
+                            "title": "Calories",
+                            "value": calories_numeric,
+                            "unit": "Intake",
+                            "icon_url": self._diet_icon_url("calories"),
+                        },
+                        {
+                            "key": "activity",
+                            "title": "Activity",
+                            "value": activity_level,
+                            "unit": "",
+                            "icon_url": self._diet_icon_url("activity"),
+                        },
+                    ],
+                    "posture_insight": {
+                        "title": "Posture Insight",
+                        "text": posture_insight,
+                    },
+                    "today_meals": {
+                        "title": "Today's Meals",
+                        "subtitle": f"{total_meals} meals + {total_snacks} snacks • {prep_time_min} min prep",
+                        "badge_icons": [
+                            self._diet_icon_url("sun"),
+                            self._diet_icon_url("moon"),
+                        ],
+                    },
+                },
+                daily_plan={
+                    "insight_text": posture_insight,
+                    "morning": morning_items,
+                    "evening": evening_items,
+                },
+                progress_screen={
+                    "subtitle": "Track your fitness journey",
+                    "top_stats": [
+                        {
+                            "key": "daily_calorie",
+                            "label": "Daily Calorie",
+                            "value": str(progress_tracking.get("daily_calories") or calories_numeric),
+                            "icon_url": self._diet_icon_url("calories"),
+                        },
+                        {
+                            "key": "consistency",
+                            "label": "Consistency",
+                            "value": str(progress_tracking.get("consistency") or "0%"),
+                            "icon_url": self._diet_icon_url("consistency"),
+                        },
+                        {
+                            "key": "nutrition_balance",
+                            "label": "Nutrition Balance",
+                            "value": str(progress_tracking.get("nutrition_balance") or "0%"),
+                            "icon_url": self._diet_icon_url("balance"),
+                        },
+                    ],
+                    "mini_bars": [
+                        {"title": "Diet Consistency", "percent": diet_consistency_percent},
+                        {"title": "Calorie Balance", "percent": calorie_balance_percent},
+                    ],
+                    "main_consistency": {
+                        "title": "Diet Consistency",
+                        "subtitle": "Your diet tracking this week",
+                        "percent": diet_consistency_percent,
+                    },
+                    "insight_text": str(_get("motivational_message") or "Small daily diet improvements create long-term healthy habits. You're doing great-keep up the momentum!"),
+                    "daily_recovery_checklist": checklist_items,
+                },
+                ai_nutrition=nutrition if isinstance(nutrition, dict) else {},
             )
 
         if domain == "workout":
