@@ -31,13 +31,14 @@ async def upload_simple_image(
     Use this for profile photos, onboarding screens, or any
     general purpose image upload not tied to a specific domain.
     """
-    await validate_upload_file(file)
+    detected_mime_type = await validate_upload_file(file)
     return await ImageService(db).upload_image(
         file=file,
         user_id=current_user.id,
         domain=None,
         view=None,
         image_type=ImageType.uploaded,
+        detected_mime_type=detected_mime_type,
     )
 
 
@@ -58,13 +59,14 @@ async def upload_domain_image(
     - domain: the domain this image belongs to e.g. skincare, haircare
     - view: the angle/type of photo e.g. front, side, hair_top
     """
-    await validate_upload_file(file)
+    detected_mime_type = await validate_upload_file(file)
     return await ImageService(db).upload_image(
         file=file,
         user_id=current_user.id,
         domain=domain,
         view=view,
         image_type=image_type,
+        detected_mime_type=detected_mime_type,
     )
 
 
@@ -97,7 +99,6 @@ async def get_image(
     return await ImageService(db).get_image(image_id, current_user.id)
 
 
-
 @router.patch("/{image_id}", response_model=ImageOut)
 @limiter.limit(RateLimits.DEFAULT)
 async def update_image(
@@ -120,5 +121,3 @@ async def delete_image(
 ):
     await ImageService(db).delete_image(image_id, current_user.id)
     return {"status": "deleted", "image_id": image_id}
-    
-    

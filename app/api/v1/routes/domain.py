@@ -49,11 +49,12 @@ async def analyze_food(
     db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(get_current_user),
 ):
-    await validate_upload_file(file)
+    detected_mime_type = await validate_upload_file(file)
     image_service = ImageService(db)
     image = await image_service.upload_image(
         file=file, user_id=current_user.id, domain="diet",
-        view="meal", image_type=ImageType.uploaded
+        view="meal", image_type=ImageType.uploaded,
+        detected_mime_type=detected_mime_type,
     )
     image_url = image_service.get_image_url(image)
     result = analyze_food_image(image_url)
