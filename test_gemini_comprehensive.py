@@ -4,49 +4,41 @@ Tests all AI-powered features: Workout, Diet, Food Analysis, Skincare, Insights
 Run this to verify your Gemini configuration is working correctly.
 """
 import json
-import google.generativeai as genai
+from google import genai
 from app.core.config import settings
 
 print("=" * 80)
 print("🧪 LOOKS LAB - Gemini API Comprehensive Test Suite")
 print("=" * 80)
 
-# Display configuration
 print(f"\n📋 Configuration:")
 print(f"   Model: {settings.GEMINI_MODEL}")
 print(f"   API Key: {settings.GEMINI_API_KEY[:20]}...{settings.GEMINI_API_KEY[-4:]}")
 print(f"   Environment: {settings.ENV}")
 
-# Configure Gemini
 try:
-    genai.configure(api_key=settings.GEMINI_API_KEY)
+    client = genai.Client(api_key=settings.GEMINI_API_KEY)
     print(f"\n✅ API Key configured successfully")
 except Exception as e:
     print(f"\n❌ Failed to configure API key: {e}")
     exit(1)
 
-# Initialize model
-try:
-    model = genai.GenerativeModel(settings.GEMINI_MODEL)
-    print(f"✅ Model initialized: {settings.GEMINI_MODEL}")
-except Exception as e:
-    print(f"\n❌ Failed to initialize model: {e}")
-    exit(1)
+print(f"✅ Client initialized for model: {settings.GEMINI_MODEL}")
 
-
-# ══════════════════════════════════════════════════════════════════════════════
-# TEST 1: Simple Text Generation
-# ══════════════════════════════════════════════════════════════════════════════
 print("\n" + "=" * 80)
 print("🧪 TEST 1: Simple Text Generation")
 print("=" * 80)
 try:
-    response = model.generate_content("Say hello to Looks Lab team!")
+    response = client.models.generate_content(
+        model=settings.GEMINI_MODEL,
+        contents="Say hello to Looks Lab team!",
+    )
     print(f"\n✅ Test 1 PASSED")
     print(f"Response: {response.text[:100]}...")
 except Exception as e:
     print(f"\n❌ TEST 1 FAILED: {e}")
     exit(1)
+
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -93,7 +85,9 @@ Return ONLY valid JSON (no markdown, no backticks):
 }"""
 
 try:
-    response = model.generate_content(workout_prompt)
+    response = client.models.generate_content(
+        model=settings.GEMINI_MODEL,
+        contents=workout_prompt)
     result = response.text.strip()
     
     # Try to parse as JSON
@@ -160,7 +154,9 @@ Return ONLY valid JSON (no markdown, no backticks):
 }"""
 
 try:
-    response = model.generate_content(meal_plan_prompt)
+    response = client.models.generate_content(
+        model=settings.GEMINI_MODEL,
+        contents=meal_plan_prompt)
     result = response.text.strip()
     
     try:
@@ -213,7 +209,9 @@ Return ONLY valid JSON (no markdown, no backticks):
 }"""
 
 try:
-    response = model.generate_content(food_analysis_prompt)
+    response = client.models.generate_content(
+        model=settings.GEMINI_MODEL,
+        contents=food_analysis_prompt)
     result = response.text.strip()
     
     try:
@@ -272,7 +270,9 @@ Return ONLY valid JSON (no markdown, no backticks):
 }"""
 
 try:
-    response = model.generate_content(skincare_prompt)
+    response = client.models.generate_content(
+        model=settings.GEMINI_MODEL,
+        contents=skincare_prompt)
     result = response.text.strip()
     
     try:
@@ -328,7 +328,9 @@ Return ONLY valid JSON (no markdown, no backticks):
 }"""
 
 try:
-    response = model.generate_content(insights_prompt)
+    response = client.models.generate_content(
+        model=settings.GEMINI_MODEL,
+        contents=insights_prompt)
     result = response.text.strip()
     
     try:
@@ -385,7 +387,9 @@ print("=" * 80)
 
 try:
     # Test with a benign prompt
-    response = model.generate_content(
+    response = client.models.generate_content(
+        model=settings.GEMINI_MODEL,
+        contents=
         "Provide 3 healthy meal ideas for someone with diabetes",
         safety_settings={
             'HARASSMENT': 'BLOCK_NONE',
@@ -431,4 +435,5 @@ Environment: {settings.ENV}
 """)
 
 print("=" * 80)
+
 

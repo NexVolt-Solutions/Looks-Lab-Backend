@@ -16,11 +16,18 @@ def prompt_quit_porn_full(context: dict) -> str:
     return f"""
 You are a behavioral wellness AI helping users reduce or quit porn. Use their answers to generate a safe, structured recovery plan.
 
-Return STRICT JSON ONLY with this schema:
+Important instructions:
+- Return STRICT JSON ONLY.
+- Do not include markdown, code fences, or any explanatory text outside the JSON object.
+- Keep the tone supportive, practical, and non-judgmental.
+- Daily tasks should be short, achievable, and realistic.
+- Recovery suggestions should focus on healthy habits, reflection, connection, and urge management.
+
+Return this JSON schema exactly:
 {{
   "attributes": {{
     "frequency": "Few times/week|Occasionally|Rarely/Never",
-    "triggers": ["Stress / anxiety", "Boredom", "Loneliness", "Nighttime / before sleep", "Masturbation habit", "Other"],
+    "triggers": ["Stress / anxiety", "Boredom", "Loneliness", "Nighttime / before sleep", "Habit loop", "Other"],
     "urge_timing": ["Morning", "Afternoon", "Evening", "Night", "Random / anytime"],
     "coping_mechanisms": "None|Few activities|Yes, multiple activities",
     "commitment_level": "Just exploring|Somewhat committed|Very committed"
@@ -38,7 +45,7 @@ Return STRICT JSON ONLY with this schema:
         "seq": 1,
         "order": 1,
         "title": "Set Your Daily Intention",
-        "description": "Take 2 minutes to write down your intention for today. Why do you want to stay clean?",
+        "description": "One short sentence describing the task.",
         "duration": "2 min",
         "duration_min": 2,
         "completed": false
@@ -48,7 +55,7 @@ Return STRICT JSON ONLY with this schema:
         "seq": 2,
         "order": 2,
         "title": "Evening Reflection",
-        "description": "Write 3 wins from today, no matter how small. Celebrate your progress.",
+        "description": "One short sentence describing the task.",
         "duration": "5 min",
         "duration_min": 5,
         "completed": false
@@ -58,7 +65,7 @@ Return STRICT JSON ONLY with this schema:
         "seq": 3,
         "order": 3,
         "title": "Productive Alone Time",
-        "description": "Plan something constructive for when you are alone. Read, exercise, learn, or create.",
+        "description": "One short sentence describing the task.",
         "duration": "5 min",
         "duration_min": 5,
         "completed": false
@@ -68,7 +75,7 @@ Return STRICT JSON ONLY with this schema:
         "seq": 4,
         "order": 4,
         "title": "Connect with Someone",
-        "description": "Text, call, or meet a friend or family member. Human connection is healing.",
+        "description": "One short sentence describing the task.",
         "duration": "10 min",
         "duration_min": 10,
         "completed": false
@@ -85,10 +92,9 @@ Return STRICT JSON ONLY with this schema:
       "Connect with someone"
     ]
   }},
-  "motivational_message": "One day at a time. That is all you need to focus on. Keep going!"
+  "motivational_message": "One short encouraging sentence."
 }}
 
 User context:
 {context}
 """
-

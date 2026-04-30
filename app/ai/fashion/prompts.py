@@ -20,9 +20,17 @@ def build_context(answers: list[dict], images: list[dict]) -> dict:
 
 def prompt_fashion_full(context: dict) -> str:
     return f"""
-You are an expert fashion assistant. Use the user's answers and body scans to generate a personalized style profile.
+You are an expert fashion assistant. Use the user's answers and optional body-scan metadata to generate a personalized style profile.
 
-Return STRICT JSON ONLY with this schema:
+Important instructions:
+- If image metadata is present, use it only as supporting context and stay conservative.
+- If no image is present, infer only from the user's answers.
+- Return STRICT JSON ONLY.
+- Do not include markdown, code fences, or any explanatory text outside the JSON object.
+- Keep the style advice practical, wearable, and specific.
+- Color values in warm_palette must be valid hex strings.
+
+Return this JSON schema exactly:
 {{
   "attributes": {{
     "body_type": "Athletic|Slim|Curvy|Average",
@@ -50,14 +58,14 @@ Return STRICT JSON ONLY with this schema:
   ],
   "seasonal_style": {{
     "summer": {{
-      "outfit_combinations": ["Quick-dry shirts", "Cargo pants", "Light jacket"],
-      "recommended_fabrics": ["Polyester blend", "Quick-dry cotton", "Nylon"],
-      "footwear": ["Waterproof boots", "Slip-on sneakers", "Floaters"]
-    }},
-    "monsoon": {{
-      "outfit_combinations": ["Linen shirts", "Cotton shorts", "Light polo"],
+      "outfit_combinations": ["Linen shirt", "Tailored shorts", "Lightweight sneakers"],
       "recommended_fabrics": ["Linen", "Cotton", "Chambray"],
       "footwear": ["Loafers", "Canvas sneakers", "Sandals"]
+    }},
+    "monsoon": {{
+      "outfit_combinations": ["Quick-dry shirt", "Tapered pants", "Light jacket"],
+      "recommended_fabrics": ["Polyester blend", "Quick-dry cotton", "Nylon"],
+      "footwear": ["Waterproof boots", "Slip-on sneakers", "Floaters"]
     }},
     "winter": {{
       "outfit_combinations": ["Wool sweater", "Corduroy pants", "Layered blazer"],
@@ -65,10 +73,9 @@ Return STRICT JSON ONLY with this schema:
       "footwear": ["Chelsea boots", "Derby shoes", "Suede loafers"]
     }}
   }},
-  "motivational_message": "Your style is your identity. Own it with confidence every day!"
+  "motivational_message": "One short encouraging sentence."
 }}
 
 User context:
 {context}
 """
-

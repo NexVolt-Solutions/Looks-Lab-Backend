@@ -20,16 +20,24 @@ def build_context(answers: list[dict], images: list[dict]) -> dict:
 
 def prompt_facial_full(context: dict) -> str:
     return f"""
-You are a facial analysis and grooming AI. Use the user's answers and face scans to generate a personalized facial improvement plan.
+You are a facial analysis and grooming AI. Use the user's answers and optional face-scan metadata to generate a personalized facial improvement plan.
 
-Return STRICT JSON ONLY with this schema:
+Important instructions:
+- If image metadata is present, use it only as supporting context and stay conservative.
+- If no image is present, infer only from the user's answers.
+- Return STRICT JSON ONLY.
+- Do not include markdown, code fences, or any explanatory text outside the JSON object.
+- Keep all scores as integers from 0 to 100.
+- Keep exercises practical, safe, and easy to follow.
+
+Return this JSON schema exactly:
 {{
   "attributes": {{
     "symmetry": "Mostly|Slightly asymmetrical|Noticeably asymmetrical",
     "jawline": "Soft/Rounded|Medium/Slightly Defined|Sharp/Strong",
     "cheekbones": "Low/Flat|Medium/Normal|High/Prominent",
-    "habits": "Low/Flat|Medium/Normal|High/Prominent",
-    "feature_goal": "Sharper jawline|Defined cheekbones|Skin texture & tone",
+    "habits": "Low|Moderate|High",
+    "feature_goal": "Sharper jawline|Defined cheekbones|Skin texture and tone|Overall improvement",
     "exercise_time": "5-10 minutes|10-15 minutes|15+ minutes"
   }},
   "feature_scores": {{
@@ -50,11 +58,8 @@ Return STRICT JSON ONLY with this schema:
       "title": "Jawline Tightener",
       "duration": "5 min",
       "steps": [
-        "Chin lift",
-        "Jaw massage (thumb & index finger, left to right)",
-        "Cheek puff transfer (right to left)",
-        "Vowel stretch (O → E)",
-        "Neck slide (forward & back)"
+        "Short step",
+        "Short step"
       ]
     }},
     {{
@@ -62,10 +67,8 @@ Return STRICT JSON ONLY with this schema:
       "title": "Lip Plumping",
       "duration": "2 min",
       "steps": [
-        "Lip pout & hold",
-        "Thumb massage around lips (small circles)",
-        "Air kiss stretch",
-        "Lip press & release"
+        "Short step",
+        "Short step"
       ]
     }},
     {{
@@ -73,10 +76,8 @@ Return STRICT JSON ONLY with this schema:
       "title": "Cheek Lifts",
       "duration": "3 min",
       "steps": [
-        "Smile wide & hold",
-        "Fingers under cheekbones, gently lift upward",
-        "Cheek puff side-to-side",
-        "Jaw open & cheek stretch"
+        "Short step",
+        "Short step"
       ]
     }},
     {{
@@ -84,10 +85,8 @@ Return STRICT JSON ONLY with this schema:
       "title": "Eye Firming",
       "duration": "4 min",
       "steps": [
-        "Place ring fingers on outer corners of eyes, gently press",
-        "Slowly close eyes, hold 5 sec, then relax",
-        "Circular massage around eye sockets (light pressure)",
-        "Lift eyebrows with fingers while keeping eyes closed"
+        "Short step",
+        "Short step"
       ]
     }},
     {{
@@ -95,16 +94,8 @@ Return STRICT JSON ONLY with this schema:
       "title": "Face Yoga Flow",
       "duration": "10 min",
       "steps": [
-        "Forehead stretch: Place palms on forehead, gently push skin up, hold 5 sec",
-        "Eyebrow lift: Use index fingers to lift brows while frowning lightly",
-        "Cheek sculpt: Smile widely, press palms on cheeks, hold 5 sec",
-        "Jaw release: Open mouth wide, gently massage jawline with thumbs",
-        "Chin press: Tilt head back, press chin upwards with palms, hold 5 sec",
-        "Lip stretch: Pucker lips, move side to side slowly",
-        "Eye opener: Place fingers under eyes, gently lift while squinting",
-        "Neck lengthener: Tilt head side to side, hold 5 sec each",
-        "Cheek puff: Puff cheeks, move air left to right",
-        "Relaxation: Place hands on face, breathe deeply, release tension"
+        "Short step",
+        "Short step"
       ]
     }}
   ],
@@ -116,13 +107,12 @@ Return STRICT JSON ONLY with this schema:
     "recovery_checklist": [
       "Did jawline exercises",
       "Did cheekbone exercises",
-      "Did lips/eyes exercises"
+      "Did lips and eyes exercises"
     ]
   }},
-  "motivational_message": "Small daily facial exercises create noticeable long-term improvements. Keep going!"
+  "motivational_message": "One short encouraging sentence."
 }}
 
 User context:
 {context}
 """
-
