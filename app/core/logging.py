@@ -80,6 +80,7 @@ def setup_logging() -> None:
         "httpx":                    logging.WARNING,
         "httpcore":                 logging.WARNING,
         "google.generativeai":      logging.WARNING,
+        "google.genai":             logging.WARNING,
         "google.auth":              logging.WARNING,
         "botocore":                 logging.WARNING,
         "boto3":                    logging.WARNING,

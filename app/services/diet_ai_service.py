@@ -2,13 +2,14 @@ import json
 from datetime import datetime, timezone
 from typing import Optional
 
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 
 from app.core.config import settings
 from app.core.logging import logger
 from app.schemas.diet import DietFocus
 
-genai.configure(api_key=settings.GEMINI_API_KEY)
+_CLIENT = genai.Client(api_key=settings.GEMINI_API_KEY)
 
 
 class DietAIService:
@@ -153,25 +154,23 @@ Rules:
 """
 
         try:
-            fresh_model = genai.GenerativeModel(settings.GEMINI_MODEL)
-            response = fresh_model.generate_content(
-                prompt,
-                generation_config=genai.GenerationConfig(
+            response = _CLIENT.models.generate_content(
+                model=settings.GEMINI_MODEL,
+                contents=prompt,
+                config=types.GenerateContentConfig(
                     temperature=0.7,
                     max_output_tokens=8192,
                     response_mime_type="application/json",
-                )
+                ),
             )
 
-            response_text = response.text.strip()
+            response_text = (getattr(response, "text", None) or "").strip()
 
-            # Clean any markdown fences
             if "```json" in response_text:
                 response_text = response_text.split("```json", 1)[1]
             if "```" in response_text:
                 response_text = response_text.rsplit("```", 1)[0]
 
-            # Extract JSON object
             start = response_text.find("{")
             end = response_text.rfind("}")
             if start != -1 and end != -1:
@@ -204,5 +203,3 @@ Rules:
             f"- Carbs: {int(c * 100)}% ({int(calories * c / 4)}g)\n"
             f"- Fats: {int(f * 100)}% ({int(calories * f / 9)}g)"
         )
-        
-        

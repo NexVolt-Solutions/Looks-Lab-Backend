@@ -9,24 +9,109 @@ def _safe(data: dict, key: str, default: Any = None) -> Any:
     return data.get(key, default) if data else default
 
 
+def _normalize_text(value: Any, default: str = "") -> str:
+    if value is None:
+        return default
+    text = str(value).strip()
+    return text or default
+
+
+def _coerce_int(value: Any, default: int) -> int:
+    try:
+        return int(float(value))
+    except (TypeError, ValueError):
+        return default
+
+
+def _default_attributes() -> dict[str, Any]:
+    return {
+        "frequency": "Occasionally",
+        "triggers": ["Stress / anxiety", "Boredom", "Nighttime / before sleep"],
+        "urge_timing": ["Evening", "Night"],
+        "coping_mechanisms": "Few activities",
+        "commitment_level": "Somewhat committed",
+    }
+
+
+def _default_recovery_path() -> dict[str, Any]:
+    return {
+        "streak": {
+            "current_streak": 0,
+            "longest_streak": 0,
+            "next_goal": 7,
+            "streak_message": "Today is day one. Let's make it count!",
+        },
+        "daily_tasks": [
+            {
+                "seq": 1,
+                "title": "Set Your Daily Intention",
+                "description": "Take a minute to remind yourself why staying clean matters today.",
+                "duration": "2 min",
+                "completed": False,
+            },
+            {
+                "seq": 2,
+                "title": "Evening Reflection",
+                "description": "Write down a few wins from the day, even if they feel small.",
+                "duration": "5 min",
+                "completed": False,
+            },
+            {
+                "seq": 3,
+                "title": "Productive Alone Time",
+                "description": "Choose a healthy activity for the time you are most likely to feel triggered.",
+                "duration": "5 min",
+                "completed": False,
+            },
+            {
+                "seq": 4,
+                "title": "Connect with Someone",
+                "description": "Reach out to a friend or family member for a short check-in.",
+                "duration": "10 min",
+                "completed": False,
+            },
+        ],
+        "exercises": [],
+    }
+
+
+def _default_progress_tracking() -> dict[str, Any]:
+    return {
+        "consistency": "42%",
+        "recovery_score": "58%",
+        "recovery_checklist": [
+            "Set your daily intention",
+            "Evening reflection",
+            "Productive alone time",
+            "Connect with someone",
+        ],
+    }
+
+
 def normalize_attributes(data: dict) -> dict[str, Any]:
     try:
         attrs = _safe(data, "attributes", {})
-        triggers    = attrs.get("triggers", [])
+        triggers = attrs.get("triggers", [])
         urge_timing = attrs.get("urge_timing", [])
+        defaults = _default_attributes()
+        normalized_triggers = [
+            _normalize_text(item) for item in triggers[:6]
+            if _normalize_text(item)
+        ] if isinstance(triggers, list) else []
+        normalized_timing = [
+            _normalize_text(item) for item in urge_timing[:5]
+            if _normalize_text(item)
+        ] if isinstance(urge_timing, list) else []
         return {
-            "frequency":          attrs.get("frequency", "Occasionally"),
-            "triggers":           triggers[:6] if isinstance(triggers, list) else [],
-            "urge_timing":        urge_timing[:5] if isinstance(urge_timing, list) else [],
-            "coping_mechanisms":  attrs.get("coping_mechanisms", "Few activities"),
-            "commitment_level":   attrs.get("commitment_level", "Somewhat committed"),
+            "frequency": _normalize_text(attrs.get("frequency"), defaults["frequency"]),
+            "triggers": normalized_triggers or defaults["triggers"],
+            "urge_timing": normalized_timing or defaults["urge_timing"],
+            "coping_mechanisms": _normalize_text(attrs.get("coping_mechanisms"), defaults["coping_mechanisms"]),
+            "commitment_level": _normalize_text(attrs.get("commitment_level"), defaults["commitment_level"]),
         }
     except Exception as e:
         logger.error(f"Error normalizing quit_porn attributes: {e}")
-        return {
-            "frequency": "Occasionally", "triggers": [], "urge_timing": [],
-            "coping_mechanisms": "Few activities", "commitment_level": "Somewhat committed",
-        }
+        return _default_attributes()
 
 
 def _normalize_streak(recovery: dict) -> dict[str, Any]:
@@ -34,45 +119,45 @@ def _normalize_streak(recovery: dict) -> dict[str, Any]:
         streak = recovery.get("streak", {})
         if not isinstance(streak, dict):
             streak = {}
+        defaults = _default_recovery_path()["streak"]
         return {
-            "current_streak": streak.get("current_streak", 0),
-            "longest_streak": streak.get("longest_streak", 0),
-            "next_goal":      streak.get("next_goal", 7),
-            "streak_message": streak.get("streak_message", "Today is day one. Let's make it count!"),
+            "current_streak": _coerce_int(streak.get("current_streak"), defaults["current_streak"]),
+            "longest_streak": _coerce_int(streak.get("longest_streak"), defaults["longest_streak"]),
+            "next_goal": _coerce_int(streak.get("next_goal"), defaults["next_goal"]),
+            "streak_message": _normalize_text(streak.get("streak_message"), defaults["streak_message"]),
         }
     except Exception as e:
         logger.error(f"Error normalizing quit_porn streak: {e}")
-        return {"current_streak": 0, "longest_streak": 0, "next_goal": 7, "streak_message": "Today is day one. Let's make it count!"}
+        return _default_recovery_path()["streak"]
 
 
 def _normalize_daily_tasks(recovery: dict) -> list[dict[str, Any]]:
     try:
         tasks_raw = recovery.get("daily_tasks", [])
         if not isinstance(tasks_raw, list):
-            return []
+            return _default_recovery_path()["daily_tasks"]
         tasks = []
         for item in tasks_raw[:5]:
             if isinstance(item, dict):
                 tasks.append({
-                    "seq":         item.get("seq", len(tasks) + 1),
-                    "title":       item.get("title", ""),
-                    "description": item.get("description", ""),
-                    "duration":    item.get("duration", ""),
-                    "completed":   item.get("completed", False),
+                    "seq": _coerce_int(item.get("seq") or item.get("order"), len(tasks) + 1),
+                    "title": _normalize_text(item.get("title")),
+                    "description": _normalize_text(item.get("description")),
+                    "duration": _normalize_text(item.get("duration"), "5 min"),
+                    "completed": bool(item.get("completed", False)),
                 })
-            elif isinstance(item, str):
-                parts = item.split(" — ")
+            elif isinstance(item, str) and item.strip():
                 tasks.append({
                     "seq": len(tasks) + 1,
-                    "title": parts[0].strip(),
+                    "title": item.strip(),
                     "description": "",
-                    "duration": parts[1].strip() if len(parts) > 1 else "",
+                    "duration": "5 min",
                     "completed": False,
                 })
-        return tasks
+        return tasks or _default_recovery_path()["daily_tasks"]
     except Exception as e:
         logger.error(f"Error normalizing quit_porn daily tasks: {e}")
-        return []
+        return _default_recovery_path()["daily_tasks"]
 
 
 def _normalize_exercises(recovery: dict) -> list[dict[str, Any]]:
@@ -84,17 +169,16 @@ def _normalize_exercises(recovery: dict) -> list[dict[str, Any]]:
         for item in exercises_raw[:10]:
             if isinstance(item, dict):
                 exercises.append({
-                    "seq":         item.get("seq", len(exercises) + 1),
-                    "title":       item.get("title", ""),
-                    "description": item.get("description", ""),
-                    "category":    item.get("category", "mental"),
-                    "completed":   item.get("completed", False),
+                    "seq": _coerce_int(item.get("seq"), len(exercises) + 1),
+                    "title": _normalize_text(item.get("title")),
+                    "description": _normalize_text(item.get("description")),
+                    "category": _normalize_text(item.get("category"), "mental"),
+                    "completed": bool(item.get("completed", False)),
                 })
-            elif isinstance(item, str):
-                parts = item.split(" — ")
+            elif isinstance(item, str) and item.strip():
                 exercises.append({
                     "seq": len(exercises) + 1,
-                    "title": parts[0].strip(),
+                    "title": item.strip(),
                     "description": "",
                     "category": "mental",
                     "completed": False,
@@ -109,31 +193,32 @@ def normalize_recovery_path(data: dict) -> dict[str, Any]:
     try:
         recovery = _safe(data, "recovery_path", {})
         return {
-            "streak":      _normalize_streak(recovery),
+            "streak": _normalize_streak(recovery),
             "daily_tasks": _normalize_daily_tasks(recovery),
-            "exercises":   _normalize_exercises(recovery),
+            "exercises": _normalize_exercises(recovery),
         }
     except Exception as e:
         logger.error(f"Error normalizing quit_porn recovery path: {e}")
-        return {
-            "streak": {"current_streak": 0, "longest_streak": 0, "next_goal": 7, "streak_message": "Today is day one. Let's make it count!"},
-            "daily_tasks": [],
-            "exercises": [],
-        }
+        return _default_recovery_path()
 
 
 def normalize_progress_tracking(data: dict) -> dict[str, Any]:
     try:
-        progress  = _safe(data, "progress_tracking", {})
+        progress = _safe(data, "progress_tracking", {})
         checklist = progress.get("recovery_checklist", [])
+        normalized_checklist = [
+            _normalize_text(item) for item in checklist[:4]
+            if _normalize_text(item)
+        ] if isinstance(checklist, list) else []
+        defaults = _default_progress_tracking()
         return {
-            "consistency":        progress.get("consistency", "0%"),
-            "recovery_score":     progress.get("recovery_score", "0%"),
-            "recovery_checklist": [str(i) for i in checklist[:4] if i] if isinstance(checklist, list) else [],
+            "consistency": _normalize_text(progress.get("consistency"), defaults["consistency"]),
+            "recovery_score": _normalize_text(progress.get("recovery_score"), defaults["recovery_score"]),
+            "recovery_checklist": normalized_checklist or defaults["recovery_checklist"],
         }
     except Exception as e:
         logger.error(f"Error normalizing quit_porn progress tracking: {e}")
-        return {"consistency": "0%", "recovery_score": "0%", "recovery_checklist": []}
+        return _default_progress_tracking()
 
 
 def analyze_quit_porn(answers: list[dict], images: list[dict]) -> Optional[dict[str, Any]]:
@@ -146,14 +231,16 @@ def analyze_quit_porn(answers: list[dict], images: list[dict]) -> Optional[dict[
             return None
 
         return {
-            "attributes":           normalize_attributes(raw),
-            "recovery_path":        normalize_recovery_path(raw),
-            "progress_tracking":    normalize_progress_tracking(raw),
-            "motivational_message": raw.get("motivational_message", "One day at a time. That's all you need to focus on. Keep going!"),
+            "attributes": normalize_attributes(raw),
+            "recovery_path": normalize_recovery_path(raw),
+            "progress_tracking": normalize_progress_tracking(raw),
+            "motivational_message": _normalize_text(
+                raw.get("motivational_message"),
+                "One day at a time. That is all you need to focus on. Keep going!",
+            ),
         }
     except GeminiError:
         raise
     except Exception as e:
         logger.error(f"Unexpected error in quit_porn analysis: {e}", exc_info=True)
         return None
-

@@ -2,13 +2,14 @@ import json
 import re
 from datetime import datetime, timezone
 
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 
 from app.core.config import settings
 from app.core.logging import logger
 from app.schemas.workout import WorkoutFocus
 
-genai.configure(api_key=settings.GEMINI_API_KEY)
+_CLIENT = genai.Client(api_key=settings.GEMINI_API_KEY)
 
 
 def _clean_json_response(text: str) -> str:
@@ -81,12 +82,13 @@ class WorkoutAIService:
             try:
                 logger.info(f"Workout AI attempt {attempt}/3 for focus={focus.value}")
 
-                response = genai.GenerativeModel(settings.GEMINI_MODEL).generate_content(
-                    prompt,
-                    generation_config=genai.GenerationConfig(
+                response = _CLIENT.models.generate_content(
+                    model=settings.GEMINI_MODEL,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
                         temperature=0.3,
                         max_output_tokens=4000,
-                    )
+                    ),
                 )
 
                 raw = getattr(response, 'text', '') or ''
@@ -115,5 +117,3 @@ class WorkoutAIService:
 
         logger.error(f"All 3 attempts failed. Last error: {last_error}")
         raise ValueError("AI generated invalid workout plan format")
-        
-        

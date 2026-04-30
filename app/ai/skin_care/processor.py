@@ -9,24 +9,90 @@ def _safe(data: dict, key: str, default: Any = None) -> Any:
     return data.get(key, default) if data else default
 
 
+def _normalize_text(value: Any, default: str = "") -> str:
+    if value is None:
+        return default
+    text = str(value).strip()
+    return text or default
+
+
+def _coerce_confidence(value: Any) -> int:
+    try:
+        numeric = int(float(value))
+    except (TypeError, ValueError):
+        return 0
+    return max(0, min(100, numeric))
+
+
 def _confidence_dict(data: dict, key: str, default_label: str = "Unknown") -> dict[str, Any]:
     if not data or key not in data:
         return {"label": default_label, "confidence": 0}
     value = data[key]
     if isinstance(value, dict):
-        return {"label": value.get("label", default_label), "confidence": value.get("confidence", 0)}
-    return {"label": str(value), "confidence": 0}
+        return {
+            "label": _normalize_text(value.get("label"), default_label),
+            "confidence": _coerce_confidence(value.get("confidence", 0)),
+        }
+    return {"label": _normalize_text(value, default_label), "confidence": 0}
+
+
+def _default_routine() -> dict[str, list[dict[str, str]]]:
+    return {
+        "today": [
+            {
+                "title": "Gentle Cleanser",
+                "description": "Remove oil, sweat, and buildup without stripping the skin barrier.",
+            },
+            {
+                "title": "Targeted Serum",
+                "description": "Apply a serum that matches your main concern such as acne, tone, or dehydration.",
+            },
+            {
+                "title": "Lightweight Moisturizer",
+                "description": "Seal in hydration and keep the skin comfortable through the day.",
+            },
+        ],
+        "night": [
+            {
+                "title": "Deep Cleanse",
+                "description": "Wash away the day's buildup so the skin can recover overnight.",
+            },
+            {
+                "title": "Night Moisturizer",
+                "description": "Use a nourishing moisturizer to support overnight repair.",
+            },
+            {
+                "title": "Two-Minute Facial Massage",
+                "description": "Massage gently to reduce tension and support product absorption.",
+            },
+        ],
+    }
+
+
+def _default_remedies() -> dict[str, Any]:
+    return {
+        "remedies": [
+            {"index": 1, "name": "Aloe Vera Gel", "steps": ["Use a few times each week", "Helps calm visible irritation and support hydration."]},
+            {"index": 2, "name": "Honey and Yogurt Mask", "steps": ["Apply briefly once or twice per week", "Can help soften the skin and improve texture."]},
+            {"index": 3, "name": "Rose Water Toner", "steps": ["Use lightly after cleansing", "Helps refresh the skin and reduce tightness."]},
+        ],
+        "safety_tips": [
+            "Patch test before using a new remedy.",
+            "Avoid the eye area unless a product is meant for it.",
+            "Stop use if redness or irritation gets worse.",
+        ],
+    }
 
 
 def normalize_attributes(data: dict) -> dict[str, dict[str, Any]]:
     try:
         attrs = _safe(data, "attributes", {})
         return {
-            "skin_type":       _confidence_dict(attrs, "skin_type", "Normal"),
-            "sensitivity":     _confidence_dict(attrs, "sensitivity", "Low"),
-            "elasticity":      _confidence_dict(attrs, "elasticity", "Moderate"),
-            "oil_balance":     _confidence_dict(attrs, "oil_balance", "Balanced"),
-            "hydration":       _confidence_dict(attrs, "hydration", "Moderate"),
+            "skin_type": _confidence_dict(attrs, "skin_type", "Normal"),
+            "sensitivity": _confidence_dict(attrs, "sensitivity", "Low"),
+            "elasticity": _confidence_dict(attrs, "elasticity", "Moderate"),
+            "oil_balance": _confidence_dict(attrs, "oil_balance", "Balanced"),
+            "hydration": _confidence_dict(attrs, "hydration", "Moderate"),
             "pore_visibility": _confidence_dict(attrs, "pore_visibility", "Low"),
         }
     except Exception as e:
@@ -41,11 +107,11 @@ def normalize_health(data: dict) -> dict[str, dict[str, Any]]:
     try:
         health = _safe(data, "health", {})
         return {
-            "skin_health":  _confidence_dict(health, "skin_health", "Healthy"),
-            "texture":      _confidence_dict(health, "texture", "Smooth"),
+            "skin_health": _confidence_dict(health, "skin_health", "Healthy"),
+            "texture": _confidence_dict(health, "texture", "Smooth"),
             "skin_barrier": _confidence_dict(health, "skin_barrier", "Strong"),
-            "smoothness":   _confidence_dict(health, "smoothness", "Smooth"),
-            "brightness":   _confidence_dict(health, "brightness", "Bright"),
+            "smoothness": _confidence_dict(health, "smoothness", "Smooth"),
+            "brightness": _confidence_dict(health, "brightness", "Bright"),
         }
     except Exception as e:
         logger.error(f"Error normalizing skincare health: {e}")
@@ -60,10 +126,10 @@ def normalize_concerns(data: dict) -> dict[str, dict[str, Any]]:
         concerns = _safe(data, "concerns", {})
         return {
             "acne_breakouts": _confidence_dict(concerns, "acne_breakouts", "None"),
-            "pigmentation":   _confidence_dict(concerns, "pigmentation", "None"),
-            "darkness_spot":  _confidence_dict(concerns, "darkness_spot", "None"),
-            "wrinkles":       _confidence_dict(concerns, "wrinkles", "None"),
-            "uneven_tone":    _confidence_dict(concerns, "uneven_tone", "None"),
+            "pigmentation": _confidence_dict(concerns, "pigmentation", "None"),
+            "darkness_spot": _confidence_dict(concerns, "darkness_spot", "None"),
+            "wrinkles": _confidence_dict(concerns, "wrinkles", "None"),
+            "uneven_tone": _confidence_dict(concerns, "uneven_tone", "None"),
         }
     except Exception as e:
         logger.error(f"Error normalizing skincare concerns: {e}")
@@ -75,51 +141,76 @@ def normalize_routine(data: dict) -> dict[str, list[dict[str, str]]]:
     try:
         routine = _safe(data, "routine", {})
         if not isinstance(routine, dict):
-            return {"today": [], "night": []}
+            return _default_routine()
 
-        def clean_items(items: list) -> list[dict]:
+        def clean_items(items: list) -> list[dict[str, str]]:
             if not isinstance(items, list):
                 return []
-            return [
-                {"title": i.get("title", ""), "description": i.get("description", "")}
-                for i in items[:5] if isinstance(i, dict)
-            ]
+            cleaned = []
+            for item in items[:5]:
+                if not isinstance(item, dict):
+                    continue
+                title = _normalize_text(item.get("title"))
+                description = _normalize_text(item.get("description"))
+                if title or description:
+                    cleaned.append({"title": title, "description": description})
+            return cleaned
 
-        return {
+        normalized = {
             "today": clean_items(routine.get("today", [])),
             "night": clean_items(routine.get("night", [])),
         }
+        defaults = _default_routine()
+        if not normalized["today"]:
+            normalized["today"] = defaults["today"]
+        if not normalized["night"]:
+            normalized["night"] = defaults["night"]
+        return normalized
     except Exception as e:
         logger.error(f"Error normalizing skincare routine: {e}")
-        return {"today": [], "night": []}
+        return _default_routine()
 
 
 def normalize_remedies(data: dict) -> dict[str, Any]:
     try:
         remedies_raw = _safe(data, "remedies", [])
-        safety_tips  = _safe(data, "safety_tips", [])
+        safety_tips = _safe(data, "safety_tips", [])
 
         if not isinstance(remedies_raw, list):
-            return {"remedies": [], "safety_tips": []}
+            return _default_remedies()
 
         remedies = []
-        for i, r in enumerate(remedies_raw[:5]):
-            if isinstance(r, dict):
+        for i, remedy in enumerate(remedies_raw[:5]):
+            if isinstance(remedy, dict):
                 remedies.append({
                     "index": i + 1,
-                    "name":  r.get("name", ""),
-                    "steps": r.get("steps", []) if isinstance(r.get("steps"), list) else [],
+                    "name": _normalize_text(remedy.get("name"), f"Remedy {i + 1}"),
+                    "steps": [
+                        _normalize_text(step) for step in remedy.get("steps", [])
+                        if _normalize_text(step)
+                    ] if isinstance(remedy.get("steps"), list) else [],
                 })
-            elif isinstance(r, str):
-                remedies.append({"index": i + 1, "name": r, "steps": []})
+            elif isinstance(remedy, str) and remedy.strip():
+                remedies.append({"index": i + 1, "name": remedy.strip(), "steps": []})
 
-        return {
-            "remedies":    remedies,
-            "safety_tips": [str(t) for t in safety_tips if t] if isinstance(safety_tips, list) else [],
+        normalized_tips = [
+            _normalize_text(tip) for tip in safety_tips
+            if _normalize_text(tip)
+        ] if isinstance(safety_tips, list) else []
+
+        normalized = {
+            "remedies": remedies,
+            "safety_tips": normalized_tips,
         }
+        defaults = _default_remedies()
+        if not normalized["remedies"]:
+            normalized["remedies"] = defaults["remedies"]
+        if not normalized["safety_tips"]:
+            normalized["safety_tips"] = defaults["safety_tips"]
+        return normalized
     except Exception as e:
         logger.error(f"Error normalizing skincare remedies: {e}")
-        return {"remedies": [], "safety_tips": []}
+        return _default_remedies()
 
 
 def normalize_products(data: dict) -> list[dict[str, Any]]:
@@ -129,18 +220,27 @@ def normalize_products(data: dict) -> list[dict[str, Any]]:
             return []
 
         result = []
-        for p in products[:3]:
-            if not isinstance(p, dict):
+        for product in products[:3]:
+            if not isinstance(product, dict):
                 continue
             result.append({
-                "name":          p.get("name", "Product"),
-                "tags":          p.get("tags", []) if isinstance(p.get("tags"), list) else [],
-                "time_of_day":   p.get("time_of_day", "AM/PM"),
-                "overview":      p.get("overview", ""),
-                "how_to_use":    p.get("how_to_use", []) if isinstance(p.get("how_to_use"), list) else [],
-                "when_to_use":   p.get("when_to_use", "Daily"),
-                "dont_use_with": p.get("dont_use_with", []) if isinstance(p.get("dont_use_with"), list) else [],
-                "confidence":    p.get("confidence", 0),
+                "name": _normalize_text(product.get("name"), "Product"),
+                "tags": [
+                    _normalize_text(tag) for tag in product.get("tags", [])
+                    if _normalize_text(tag)
+                ] if isinstance(product.get("tags"), list) else [],
+                "time_of_day": _normalize_text(product.get("time_of_day"), "AM/PM"),
+                "overview": _normalize_text(product.get("overview")),
+                "how_to_use": [
+                    _normalize_text(step) for step in product.get("how_to_use", [])
+                    if _normalize_text(step)
+                ] if isinstance(product.get("how_to_use"), list) else [],
+                "when_to_use": _normalize_text(product.get("when_to_use"), "Daily"),
+                "dont_use_with": [
+                    _normalize_text(item) for item in product.get("dont_use_with", [])
+                    if _normalize_text(item)
+                ] if isinstance(product.get("dont_use_with"), list) else [],
+                "confidence": _coerce_confidence(product.get("confidence", 0)),
             })
         return result
     except Exception as e:
@@ -158,17 +258,19 @@ def analyze_skincare(answers: list[dict], images: list[dict]) -> Optional[dict[s
             return None
 
         return {
-            "attributes":           normalize_attributes(raw),
-            "health":               normalize_health(raw),
-            "concerns":             normalize_concerns(raw),
-            "routine":              normalize_routine(raw),
-            "remedies":             normalize_remedies(raw),
-            "products":             normalize_products(raw),
-            "motivational_message": raw.get("motivational_message", "Consistency is key — your skin will thank you with a healthy glow!"),
+            "attributes": normalize_attributes(raw),
+            "health": normalize_health(raw),
+            "concerns": normalize_concerns(raw),
+            "routine": normalize_routine(raw),
+            "remedies": normalize_remedies(raw),
+            "products": normalize_products(raw),
+            "motivational_message": _normalize_text(
+                raw.get("motivational_message"),
+                "Consistency is key - your skin can improve with steady daily care.",
+            ),
         }
     except GeminiError:
         raise
     except Exception as e:
         logger.error(f"Unexpected error in skincare analysis: {e}", exc_info=True)
         return None
-

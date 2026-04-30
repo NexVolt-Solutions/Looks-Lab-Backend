@@ -16,16 +16,27 @@ def prompt_workout_full(context: dict) -> str:
     return f"""
 You are a certified fitness coach AI. Use the user's answers to generate a personalized workout plan.
 
-Return STRICT JSON ONLY with this schema:
+Important instructions:
+- Return STRICT JSON ONLY.
+- Do not include markdown, code fences, or any explanatory text outside the JSON object.
+- Keep the workout realistic, beginner-safe when needed, and easy to follow at home or in a gym.
+- Keep exercise steps short and practical.
+- Prefer clear titles, practical durations, and helpful recovery guidance.
+
+Return this JSON schema exactly:
 {{
   "attributes": {{
     "intensity": "Low|Moderate|High",
     "activity": "Sedentary|Moderate|Active",
-    "title": "Short motivational subtitle for the workout domain",
+    "goal": "Fat Loss|Muscle Gain|General Fitness|Strength|Mobility",
     "today_focus": ["Flexibility", "Build Muscle", "Fatloss", "Strength"],
     "posture_insight": {{
       "title": "Posture Insight",
-      "message": "Personalized insight based on user answers"
+      "message": "One short personalized insight."
+    }},
+    "workout_summary": {{
+      "total_exercises": 6,
+      "total_duration_min": 22
     }}
   }},
   "exercises": {{
@@ -35,11 +46,8 @@ Return STRICT JSON ONLY with this schema:
         "title": "Jumping Jacks",
         "duration": "5 min",
         "steps": [
-          "Stand straight with feet together",
-          "Jump and spread legs while raising arms",
-          "Jump back to start position",
-          "Keep a steady pace",
-          "Breathe normally and stay relaxed"
+          "Short step",
+          "Short step"
         ]
       }},
       {{
@@ -47,12 +55,8 @@ Return STRICT JSON ONLY with this schema:
         "title": "Bodyweight Squats",
         "duration": "5 min",
         "steps": [
-          "Stand with feet shoulder-width apart",
-          "Keep chest up and back straight",
-          "Bend knees and lower hips as if sitting on a chair",
-          "Go as low as comfortable, then rise back up",
-          "Repeat steadily, maintaining proper form",
-          "Breathe in while lowering, out while rising"
+          "Short step",
+          "Short step"
         ]
       }},
       {{
@@ -60,26 +64,19 @@ Return STRICT JSON ONLY with this schema:
         "title": "Arm Circles",
         "duration": "2 min",
         "steps": [
-          "Stand straight with feet shoulder-width apart",
-          "Extend arms out to the sides at shoulder height",
-          "Rotate arms forward in small controlled circles",
-          "Gradually make the circles bigger",
-          "After 1 minute, switch direction and rotate backward",
-          "Keep shoulders relaxed and core engaged"
+          "Short step",
+          "Short step"
         ]
       }}
     ],
     "evening": [
       {{
         "seq": 1,
-        "title": "Jumping Jacks",
+        "title": "Brisk Walk or Warmup",
         "duration": "5 min",
         "steps": [
-          "Stand straight with feet together",
-          "Jump and spread legs while raising arms",
-          "Jump back to start position",
-          "Keep a steady pace",
-          "Breathe normally and stay relaxed"
+          "Short step",
+          "Short step"
         ]
       }},
       {{
@@ -87,12 +84,8 @@ Return STRICT JSON ONLY with this schema:
         "title": "Plank",
         "duration": "2 min",
         "steps": [
-          "Start in a forearm plank position, elbows under shoulders",
-          "Keep body in a straight line from head to heels",
-          "Engage core, glutes, and legs",
-          "Avoid letting hips sag or lift too high",
-          "Breathe steadily and hold the position",
-          "Modify by dropping knees if needed for comfort"
+          "Short step",
+          "Short step"
         ]
       }},
       {{
@@ -100,12 +93,8 @@ Return STRICT JSON ONLY with this schema:
         "title": "Stretching",
         "duration": "5 min",
         "steps": [
-          "Reach arms overhead and stretch upward",
-          "Side stretches: lean gently to left and right",
-          "Forward fold: hinge at hips, reach toward toes",
-          "Shoulder rolls: forward and backward",
-          "Neck stretch: tilt head gently left, right, forward, back",
-          "Hold each stretch for 15-30 seconds, breathe deeply"
+          "Short step",
+          "Short step"
         ]
       }}
     ]
@@ -122,10 +111,9 @@ Return STRICT JSON ONLY with this schema:
       "Took a rest if needed"
     ]
   }},
-  "motivational_message": "Consistency improves stamina, strength & posture over time. Keep pushing!"
+  "motivational_message": "One short encouraging sentence."
 }}
 
 User context:
 {context}
 """
-

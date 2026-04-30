@@ -20,21 +20,29 @@ def build_context(answers: list[dict], images: list[dict]) -> dict:
 
 def prompt_diet_full(context: dict) -> str:
     return f"""
-You are a certified nutritionist AI. Use the user's answers to generate a personalized diet plan.
+You are a certified nutritionist AI. Use the user's answers and optional meal images to generate a personalized diet plan.
 
-Return STRICT JSON ONLY with this schema:
+Important instructions:
+- If image metadata is present, use it only as supporting context and stay conservative.
+- If no image is present, infer only from the user's answers.
+- Return STRICT JSON ONLY.
+- Do not include markdown, code fences, or any explanatory text outside the JSON object.
+- Keep the plan practical, realistic, and easy to follow in daily life.
+- Use simple food suggestions, not extreme diets.
+
+Return this JSON schema exactly:
 {{
   "attributes": {{
     "calories_intake": "1800 kcal",
     "activity": "Sedentary|Moderate|Active",
     "goal": "Fat Loss|Muscle Gain|General Fitness|Weight Maintenance",
-    "diet_type": "Balanced|High-Protein|Vegetarian",
+    "diet_type": "Balanced|High-Protein|Vegetarian|Low-Carb|Maintenance",
     "today_focus": ["Build Muscle", "Maintenance", "Clean & Energetic Diet", "Fatloss"],
-    "posture_insight": "Consistency improves energy, digestion & overall health over time. Keep going!",
+    "posture_insight": "One short encouraging insight.",
     "meals_summary": {{
       "total_meals": 3,
       "total_snacks": 2,
-      "prep_time_min": 12
+      "prep_time_min": 22
     }}
   }},
   "nutrition_targets": {{
@@ -50,40 +58,46 @@ Return STRICT JSON ONLY with this schema:
       {{
         "seq": 1,
         "title": "Breakfast",
-        "description": "Oatmeal with fruits & nuts",
-        "time": "8:00 AM"
+        "subtitle": "Oatmeal with fruits and nuts",
+        "description": "One clear sentence explaining the purpose of this step.",
+        "duration": "10 min"
       }},
       {{
         "seq": 2,
         "title": "Morning Snack",
-        "description": "Yogurt or smoothie",
-        "time": "10:30 AM"
+        "subtitle": "Yogurt or smoothie",
+        "description": "One clear sentence explaining the purpose of this step.",
+        "duration": "5 min"
       }},
       {{
         "seq": 3,
         "title": "Hydration",
-        "description": "Drink 1 glass of water",
-        "time": "Throughout morning"
+        "subtitle": "Drink 1 glass of water",
+        "description": "One clear sentence explaining the purpose of this step.",
+        "duration": "1 min"
       }}
     ],
     "evening": [
       {{
         "seq": 1,
         "title": "Lunch",
-        "description": "Balanced plate: protein + veggies + carbs",
-        "time": "1:00 PM"
+        "subtitle": "Balanced plate with protein, vegetables, and carbs",
+        "description": "One clear sentence explaining the purpose of this step.",
+        "duration": "20 min"
       }},
       {{
         "seq": 2,
         "title": "Afternoon Snack",
-        "description": "Fruit or nuts",
-        "time": "4:00 PM"
+        "subtitle": "Fruit or nuts",
+        "description": "One clear sentence explaining the purpose of this step.",
+        "duration": "5 min"
       }},
       {{
         "seq": 3,
         "title": "Dinner",
-        "description": "Light, easy-to-digest meal",
-        "time": "7:30 PM"
+        "subtitle": "Light, easy-to-digest meal",
+        "description": "One clear sentence explaining the purpose of this step.",
+        "duration": "20 min"
       }}
     ]
   }},
@@ -96,14 +110,13 @@ Return STRICT JSON ONLY with this schema:
     "recovery_checklist": [
       "Ate all planned meals",
       "Drank at least 8 glasses of water",
-      "Included fruits & vegetables",
+      "Included fruits and vegetables",
       "Took rest if needed"
     ]
   }},
-  "motivational_message": "Small daily diet improvements create long-term healthy habits. You're doing great - keep up the momentum!"
+  "motivational_message": "One short encouraging sentence."
 }}
 
 User context:
 {context}
 """
-
