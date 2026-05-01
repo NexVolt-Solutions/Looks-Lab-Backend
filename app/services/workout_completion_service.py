@@ -3,6 +3,7 @@ from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.logging import logger
+from app.models.insight import Insight
 from app.models.workout_completion import WorkoutCompletion
 from app.schemas.workout_completion import (
     WorkoutCompletionOut, WorkoutCompletionSave,
@@ -32,7 +33,50 @@ class WorkoutCompletionService:
 
         return sorted(normalized)
 
+    @staticmethod
+    def _validation_error(loc: list, msg: str, error_type: str = "value_error") -> Exception:
+        from fastapi import HTTPException, status
+
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=[{"loc": loc, "msg": msg, "type": error_type}],
+        )
+
+    async def _resolve_expected_totals(
+        self,
+        user_id: int,
+        domain: str,
+        target_date: date,
+    ) -> tuple[Optional[int], int]:
+        """
+        Returns (expected_total_exercises, recovery_total) from latest domain insight payload.
+        For domains without structured routine/recovery data this may return (None, 0).
+        """
+        result = await self.db.execute(
+            select(Insight).where(
+                Insight.user_id == user_id,
+                Insight.category == domain,
+            ).order_by(Insight.updated_at.desc(), Insight.created_at.desc()).limit(1)
+        )
+        insight = result.scalar_one_or_none()
+        if not insight or not isinstance(insight.content, dict):
+            return None, 0
+
+        content = insight.content
+        routine = content.get("routine", {}) if isinstance(content.get("routine"), dict) else {}
+        progress_tracking = content.get("progress_tracking", {}) if isinstance(content.get("progress_tracking"), dict) else {}
+
+        morning = routine.get("morning", []) if isinstance(routine.get("morning"), list) else []
+        evening = routine.get("evening", []) if isinstance(routine.get("evening"), list) else []
+        expected_total = len(morning) + len(evening)
+
+        recovery_list = progress_tracking.get("recovery_checklist", [])
+        recovery_total = len(recovery_list) if isinstance(recovery_list, list) else 0
+
+        return (expected_total if expected_total > 0 else None), recovery_total
+
     async def get_completion(self, user_id: int, target_date: date, domain: str = "workout") -> Optional[WorkoutCompletionOut]:
+        expected_total, recovery_total = await self._resolve_expected_totals(user_id, domain, target_date)
         result = await self.db.execute(
             select(WorkoutCompletion).where(
                 WorkoutCompletion.user_id == user_id,
@@ -46,12 +90,16 @@ class WorkoutCompletionService:
         return WorkoutCompletionOut(
             date=record.date,
             completed_indices=record.completed_indices or [],
-            total_exercises=record.total_exercises,
+            total_exercises=record.total_exercises if record.total_exercises > 0 else (expected_total or 0),
             score=record.score,
-            recovery_completed_indices=(record.recovery_completed_indices or []) if domain == "workout" else [],
+            recovery_completed_indices=record.recovery_completed_indices or [],
+            recovery_total=recovery_total,
+            updated_at=record.recorded_at,
+            version=int(record.recorded_at.timestamp() * 1000),
         )
 
     async def save_completion(self, user_id: int, payload: WorkoutCompletionSave, domain: str = "workout") -> WorkoutCompletionOut:
+        expected_total, recovery_total = await self._resolve_expected_totals(user_id, domain, payload.date)
         result = await self.db.execute(
             select(WorkoutCompletion).where(
                 WorkoutCompletion.user_id == user_id,
@@ -61,10 +109,58 @@ class WorkoutCompletionService:
         )
         existing = result.scalar_one_or_none()
 
-        requested_total = max(int(payload.total_exercises or 0), 0)
-        total = existing.total_exercises if existing and existing.total_exercises > 0 else requested_total
-        completed_indices = self._normalize_indices(payload.completed_indices, total) if total > 0 else []
-        recovery_indices = self._normalize_indices(payload.recovery_completed_indices, 4) if domain == "workout" else []
+        requested_total = max(int(payload.total_exercises or 0), 0) if payload.total_exercises is not None else None
+        existing_total = existing.total_exercises if existing and existing.total_exercises > 0 else None
+
+        if domain == "diet":
+            # Diet total is derived from current AI routine (morning+evening).
+            total = expected_total or existing_total or requested_total or 0
+            if requested_total is not None and expected_total is not None and requested_total != expected_total:
+                self._validation_error(
+                    ["body", "total_exercises"],
+                    f"total_exercises must match current diet routine item count ({expected_total})",
+                )
+        else:
+            total = requested_total or existing_total or expected_total or 0
+
+        if payload.completed_indices is not None:
+            seen: set[int] = set()
+            for idx, value in enumerate(payload.completed_indices):
+                if not isinstance(value, int):
+                    self._validation_error(["body", "completed_indices", idx], f"Index {value} must be an integer")
+                if value < 0:
+                    self._validation_error(["body", "completed_indices", idx], f"Index {value} must be non-negative")
+                if total <= 0 or value >= total:
+                    self._validation_error(
+                        ["body", "completed_indices", idx],
+                        f"Index {value} is out of range for total_exercises={total}",
+                    )
+                if value in seen:
+                    self._validation_error(["body", "completed_indices", idx], f"Duplicate index {value} is not allowed")
+                seen.add(value)
+            completed_indices = sorted(seen)
+        else:
+            completed_indices = existing.completed_indices if existing else []
+
+        if payload.recovery_completed_indices is not None:
+            seen_recovery: set[int] = set()
+            for idx, value in enumerate(payload.recovery_completed_indices):
+                if not isinstance(value, int):
+                    self._validation_error(["body", "recovery_completed_indices", idx], f"Index {value} must be an integer")
+                if value < 0:
+                    self._validation_error(["body", "recovery_completed_indices", idx], f"Index {value} must be non-negative")
+                if recovery_total > 0 and value >= recovery_total:
+                    self._validation_error(
+                        ["body", "recovery_completed_indices", idx],
+                        f"Index {value} is out of range for recovery_total={recovery_total}",
+                    )
+                if value in seen_recovery:
+                    self._validation_error(["body", "recovery_completed_indices", idx], f"Duplicate index {value} is not allowed")
+                seen_recovery.add(value)
+            recovery_indices = sorted(seen_recovery)
+        else:
+            recovery_indices = existing.recovery_completed_indices if existing else []
+
         completed_count = len(completed_indices)
         score = round((completed_count / total) * 100, 1) if total > 0 else 0.0
 
@@ -73,8 +169,10 @@ class WorkoutCompletionService:
             existing.total_exercises = total
             existing.score = score
             existing.recovery_completed_indices = recovery_indices
+            existing.recorded_at = datetime.now(timezone.utc)
+            record = existing
         else:
-            self.db.add(WorkoutCompletion(
+            record = WorkoutCompletion(
                 user_id=user_id,
                 domain=domain,
                 date=payload.date,
@@ -82,9 +180,11 @@ class WorkoutCompletionService:
                 total_exercises=total,
                 score=score,
                 recovery_completed_indices=recovery_indices,
-            ))
+            )
+            self.db.add(record)
 
         await self.db.commit()
+        await self.db.refresh(record)
         logger.info(f"Workout completion saved for user {user_id} domain={domain} date={payload.date} score={score}")
         return WorkoutCompletionOut(
             date=payload.date,
@@ -92,6 +192,9 @@ class WorkoutCompletionService:
             total_exercises=total,
             score=score,
             recovery_completed_indices=recovery_indices,
+            recovery_total=recovery_total,
+            updated_at=record.recorded_at,
+            version=int(record.recorded_at.timestamp() * 1000),
         )
 
     async def get_weekly_summary(self, user_id: int) -> WeeklyWorkoutSummaryOut:

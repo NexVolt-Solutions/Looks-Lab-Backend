@@ -1,13 +1,13 @@
-from datetime import date
+from datetime import date, datetime
 from typing import Optional
 from pydantic import BaseModel, Field
 
 
 class WorkoutCompletionSave(BaseModel):
     date: date
-    completed_indices: list[int] = Field(default=[])
-    total_exercises: int = Field(default=6)
-    recovery_completed_indices: list[int] = Field(default=[])  # checklist item indices
+    completed_indices: Optional[list[int]] = None
+    total_exercises: Optional[int] = None
+    recovery_completed_indices: Optional[list[int]] = None  # checklist item indices
 
 
 class WorkoutCompletionOut(BaseModel):
@@ -16,6 +16,9 @@ class WorkoutCompletionOut(BaseModel):
     total_exercises: int
     score: float
     recovery_completed_indices: list[int] = Field(default=[])  # checklist item indices
+    recovery_total: int = 0
+    updated_at: datetime
+    version: int = 1
 
 
 class WorkoutSummaryItem(BaseModel):
