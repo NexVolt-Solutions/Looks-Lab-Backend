@@ -280,6 +280,18 @@ class DomainService:
                     redirect="review_scans",
                 )
 
+        # Facial contract: front/right/left scans must exist before AI processing can start.
+        if domain == "facial":
+            front_ready, right_ready, left_ready = await self._facial_required_scans_ready(user_id)
+            if not (front_ready and right_ready and left_ready):
+                return DomainFlowOut(
+                    status="pending",
+                    current=None,
+                    next=None,
+                    progress=progress,
+                    redirect="review_scans",
+                )
+
         fresh_ai_output = await self._get_fresh_completed_ai_output(user_id, domain)
         if fresh_ai_output:
             logger.info(f"Returning persisted completed flow for {domain} (user {user_id})")
@@ -466,6 +478,20 @@ class DomainService:
         )
         present_views = {str(view).lower() for (view,) in result.all() if view}
         return "front" in present_views, "back" in present_views
+
+    async def _facial_required_scans_ready(self, user_id: int) -> tuple[bool, bool, bool]:
+        """Return whether latest facial front/right/left scans exist for a user."""
+        result = await self.db.execute(
+            select(Image.view)
+            .where(
+                Image.user_id == user_id,
+                Image.domain == "facial",
+                Image.view.in_(["front", "right", "left"]),
+            )
+            .order_by(Image.uploaded_at.desc())
+        )
+        present_views = {str(view).lower() for (view,) in result.all() if view}
+        return "front" in present_views, "right" in present_views, "left" in present_views
 
     def _extract_score(self, domain: str, ai_output: dict) -> Optional[float]:
         return extract_domain_score(domain, ai_output)
@@ -1068,6 +1094,43 @@ class DomainService:
                 completed_indices,
                 0,
             )
+            feature_scores = _get("feature_scores") or {}
+            features_list = feature_scores.get("features", []) if isinstance(feature_scores, dict) else []
+            progress_tracking = _get("progress_tracking") or {}
+            images = await self._get_domain_images(user_id, domain)
+
+            def _scan_url(view_name: str) -> Optional[str]:
+                for image in images:
+                    if str(image.get("view", "")).lower() == view_name:
+                        return image.get("url")
+                return None
+
+            def _feature_percent(name: str, default: int) -> int:
+                for item in features_list:
+                    if not isinstance(item, dict):
+                        continue
+                    item_name = str(item.get("name", "")).lower().replace(" ", "")
+                    expected = name.lower().replace(" ", "")
+                    if item_name == expected:
+                        try:
+                            return int(item.get("score", default))
+                        except (TypeError, ValueError):
+                            return default
+                return default
+
+            today_progress_done = sum(1 for item in normalized_exercises if item.get("completed"))
+            checklist = progress_tracking.get("recovery_checklist", [])
+            if not isinstance(checklist, list):
+                checklist = []
+            checklist_items = [
+                {
+                    "seq": idx + 1,
+                    "title": str(item),
+                    "completed": idx < today_progress_done,
+                }
+                for idx, item in enumerate(checklist[:3])
+            ]
+
             return DomainFlowOut(
                 status="completed",
                 current=None,
@@ -1076,11 +1139,41 @@ class DomainService:
                 redirect="completed_flow",
                 ai_attributes=_get("attributes") or {},
                 ai_message=_get("motivational_message"),
-                ai_features=_get("feature_scores") or {},
-                ai_progress=_get("progress_tracking") or {},
+                ai_features=feature_scores,
+                ai_progress=progress_tracking,
                 ai_exercises={
                     "total": len(normalized_exercises),
                     "exercises": normalized_exercises,
+                },
+                ai_summary={
+                    "title": "Your Style Profile",
+                    "subtitle": "Feature Scores",
+                    "review_scans": [
+                        {"key": "front", "label": "Front View", "url": _scan_url("front")},
+                        {"key": "right", "label": "Right View", "url": _scan_url("right")},
+                        {"key": "left", "label": "Left View", "url": _scan_url("left")},
+                    ],
+                    "overall_score": int(feature_scores.get("overall_score", 50)) if isinstance(feature_scores, dict) else 50,
+                    "features": features_list if isinstance(features_list, list) else [],
+                },
+                daily_plan={
+                    "title": "Personalized Exercise",
+                    "subtitle": "Today's Progress",
+                    "progress_done": today_progress_done,
+                    "progress_total": len(normalized_exercises),
+                    "exercises": normalized_exercises,
+                },
+                progress_screen={
+                    "title": "Your Progress",
+                    "subtitle": "Track your facial feature improvement journey",
+                    "top_stats": [
+                        {"key": "jawline", "label": "Jawline", "value": f"{_feature_percent('Jawline', 78)}%"},
+                        {"key": "cheekbones", "label": "Cheekbones", "value": f"{_feature_percent('Cheek bones', 72)}%"},
+                        {"key": "symmetry", "label": "Symmetry", "value": f"{int(progress_tracking.get('symmetry_score', 75))}%"},
+                    ],
+                    "consistency_percent": int(self._extract_percent(progress_tracking.get("consistency"), 85)),
+                    "insight_text": str(_get("motivational_message") or "Small daily facial exercises create noticeable long-term improvements. Keep going!"),
+                    "daily_recovery_checklist": checklist_items,
                 },
             )
 
