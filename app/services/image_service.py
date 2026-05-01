@@ -88,7 +88,7 @@ class ImageService:
                     )
                     await self.db.commit()
                     from app.utils import ai_task_manager
-                    ai_task_manager.clear_task(user_id, domain)
+                    await ai_task_manager.clear_task(user_id, domain)
                     logger.info(f"Cleared AI task state for {domain} (user {user_id}) - will re-run with new images")
                 except Exception as e:
                     logger.warning(f"Failed to clear AI task state for {domain} (user {user_id}): {e}")

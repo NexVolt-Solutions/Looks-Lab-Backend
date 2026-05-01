@@ -189,8 +189,17 @@ class DomainService:
             )
         )
         await self.db.commit()
-        ai_task_manager.clear_task(user_id, domain)
+        await ai_task_manager.clear_task(user_id, domain)
         logger.info(f"Reset domain answers for {domain} (user {user_id})")
+
+    async def get_submission_hash(self, user_id: int, domain: str) -> Optional[str]:
+        return await ai_task_manager.get_submission_hash(user_id, domain)
+
+    async def remember_submission_hash(self, user_id: int, domain: str, submission_hash: str) -> None:
+        await ai_task_manager.set_submission_hash(user_id, domain, submission_hash)
+
+    async def get_cached_ai_task(self, user_id: int, domain: str) -> Optional[dict[str, Any]]:
+        return await ai_task_manager.get_task(user_id, domain)
 
     async def calculate_progress(self, domain: str, user_id: int) -> DomainProgressOut:
         questions = await self.get_domain_questions(domain)
@@ -277,13 +286,13 @@ class DomainService:
             return await self._build_completed_flow(user_id, domain, progress, fresh_ai_output)
 
         # All questions answered -> check if AI already running
-        task = ai_task_manager.get_task(user_id, domain)
+        task = await ai_task_manager.get_task(user_id, domain)
 
         if task and task["status"] == "processing":
             # Check if task has timed out (Gemini hung or silently failed)
-            if ai_task_manager.is_timed_out(user_id, domain, timeout_seconds=90):
+            if await ai_task_manager.is_timed_out(user_id, domain, timeout_seconds=90):
                 logger.warning(f"AI task timed out for {domain} (user {user_id}) — clearing and retrying")
-                ai_task_manager.clear_task(user_id, domain)
+                await ai_task_manager.clear_task(user_id, domain)
                 # Fall through to re-launch AI below
             else:
                 # AI is still running -> return processing immediately
@@ -300,20 +309,20 @@ class DomainService:
             # AI finished -> return cached result
             if task.get("result") is not None:
                 logger.info(f"Returning cached AI result for {domain} (user {user_id})")
-                return task["result"]
+                return DomainFlowOut.model_validate(task["result"])
 
             logger.warning(f"Completed AI task had no result for {domain} (user {user_id}) — clearing and rebuilding state")
-            ai_task_manager.clear_task(user_id, domain)
+            await ai_task_manager.clear_task(user_id, domain)
             fresh_ai_output = await self._get_fresh_completed_ai_output(user_id, domain)
             if fresh_ai_output:
                 return await self._build_completed_flow(user_id, domain, progress, fresh_ai_output)
 
         if task and task["status"] == "failed":
             # Previous attempt failed -> clear and retry
-            ai_task_manager.clear_task(user_id, domain)
+            await ai_task_manager.clear_task(user_id, domain)
 
         # No task running -> start AI in background, return processing immediately
-        ai_task_manager.set_processing(user_id, domain)
+        await ai_task_manager.set_processing(user_id, domain)
 
         # Launch background task (non-blocking) — keep reference to prevent GC
         _bg_task = asyncio.create_task(
@@ -366,10 +375,10 @@ class DomainService:
             async with AsyncSessionLocal() as db:
                 service = DomainService(db)
                 result = await service._process_ai_completion(user_id, domain)
-                ai_task_manager.set_completed(user_id, domain, result)
+                await ai_task_manager.set_completed(user_id, domain, result)
                 logger.info(f"Background AI task completed for {domain} (user {user_id})")
         except Exception as e:
-            ai_task_manager.set_failed(user_id, domain, str(e))
+            await ai_task_manager.set_failed(user_id, domain, str(e))
             logger.error(f"Background AI task failed for {domain} (user {user_id}): {e}", exc_info=True)
 
     _DOMAIN_ICONS: dict[str, str] = {

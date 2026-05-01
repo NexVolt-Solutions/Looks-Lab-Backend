@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+import hashlib
 from typing import Optional
 
 from fastapi import HTTPException, status
@@ -26,6 +27,12 @@ class AuthService:
 
     def __init__(self, db: AsyncSession):
         self.db = db
+
+    @staticmethod
+    def _hash_refresh_token(refresh_token: str) -> str:
+        # Hash-at-rest to prevent refresh token replay after DB compromise.
+        digest = hashlib.sha256(f"{settings.JWT_SECRET}:{refresh_token}".encode("utf-8")).hexdigest()
+        return f"sha256${digest}"
 
     async def get_or_create_user(
         self, email: str, provider: AuthProviderEnum, payload: dict
@@ -125,6 +132,7 @@ class AuthService:
         })
 
         refresh_value = create_refresh_token()
+        refresh_token_hash = self._hash_refresh_token(refresh_value)
         expires_at = get_refresh_expiry()
 
         result = await self.db.execute(
@@ -145,7 +153,7 @@ class AuthService:
             # Insert new token row
             self.db.add(RefreshToken(
                 user_id=user.id,
-                token=refresh_value,
+                token=refresh_token_hash,
                 expires_at=expires_at,
                 is_revoked=False,
                 device_info=device_info,
@@ -172,8 +180,19 @@ class AuthService:
         )
 
     async def validate_refresh_token(self, refresh_token: str) -> User:
-        result = await self.db.execute(select(RefreshToken).where(RefreshToken.token == refresh_token))
+        hashed_token = self._hash_refresh_token(refresh_token)
+        result = await self.db.execute(select(RefreshToken).where(RefreshToken.token == hashed_token))
         token_record = result.scalar_one_or_none()
+
+        # Backward compatibility for legacy plaintext refresh tokens.
+        # If found, migrate token-at-rest to hashed format.
+        if not token_record:
+            legacy_result = await self.db.execute(select(RefreshToken).where(RefreshToken.token == refresh_token))
+            token_record = legacy_result.scalar_one_or_none()
+            if token_record:
+                token_record.token = hashed_token
+                await self.db.commit()
+                await self.db.refresh(token_record)
 
         if not token_record:
             # Token not found — could be already rotated (stolen token reuse attempt)
@@ -221,8 +240,16 @@ class AuthService:
             logger.error(f"Failed to revoke all tokens for user {user_id}: {e}")
 
     async def revoke_refresh_token(self, refresh_token: str) -> None:
-        result = await self.db.execute(select(RefreshToken).where(RefreshToken.token == refresh_token))
+        hashed_token = self._hash_refresh_token(refresh_token)
+        result = await self.db.execute(select(RefreshToken).where(RefreshToken.token == hashed_token))
         token_record = result.scalar_one_or_none()
+
+        if not token_record:
+            # Backward compatibility for legacy plaintext tokens.
+            legacy_result = await self.db.execute(select(RefreshToken).where(RefreshToken.token == refresh_token))
+            token_record = legacy_result.scalar_one_or_none()
+            if token_record:
+                token_record.token = hashed_token
 
         if not token_record:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invalid or missing refresh token")
