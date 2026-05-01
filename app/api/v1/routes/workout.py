@@ -1,3 +1,5 @@
+import asyncio
+
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -44,7 +46,8 @@ async def generate_workout_plan(
             elif "goal" in question_lower:
                 user_data["goals"] = str(answer.answer)
 
-        workout_plan = WorkoutAIService.generate_workout_plan(
+        workout_plan = await asyncio.to_thread(
+            WorkoutAIService.generate_workout_plan,
             focus=payload.focus,
             user_data=user_data,
             intensity=payload.intensity,

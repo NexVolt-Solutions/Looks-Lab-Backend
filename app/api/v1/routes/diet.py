@@ -1,3 +1,5 @@
+import asyncio
+
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -65,7 +67,8 @@ async def generate_meal_plan(
                         user_data["activity_level"] = value
                         break
 
-        meal_plan = DietAIService.generate_meal_plan(
+        meal_plan = await asyncio.to_thread(
+            DietAIService.generate_meal_plan,
             focus=payload.focus,
             user_data=user_data,
             calorie_target=payload.calorie_target,
