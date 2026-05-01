@@ -555,6 +555,40 @@ class DomainService:
         return normalized
 
     @staticmethod
+    def _normalize_quit_porn_exercises(
+        items: list[Any],
+        completed_indices: set[int],
+        start_offset: int,
+    ) -> list[dict[str, Any]]:
+        normalized = []
+        for idx, item in enumerate(items):
+            if isinstance(item, dict):
+                title = item.get("title", "")
+                description = item.get("description", "")
+                duration = item.get("duration", "")
+                category = item.get("category", "mental")
+                existing_completed = bool(item.get("completed", False))
+                seq = item.get("seq", idx + 1)
+            else:
+                title = str(item)
+                description = ""
+                duration = ""
+                category = "mental"
+                existing_completed = False
+                seq = idx + 1
+
+            normalized.append({
+                "seq": seq,
+                "title": title or f"Exercise {idx + 1}",
+                "subtitle": description,
+                "description": description,
+                "duration": duration or "5 min",
+                "category": category,
+                "completed": (start_offset + idx) in completed_indices or existing_completed,
+            })
+        return normalized
+
+    @staticmethod
     def _extract_number(value: Any, default: float = 0.0) -> float:
         import re
 
@@ -817,12 +851,23 @@ class DomainService:
 
             raw_daily_tasks = recovery_path.get("daily_tasks") or []
             daily_tasks = self._normalize_quit_porn_daily_tasks(raw_daily_tasks, completed_indices, len(checklist_items))
+            raw_exercises = recovery_path.get("exercises") or []
+            exercises = self._normalize_quit_porn_exercises(
+                raw_exercises,
+                completed_indices,
+                len(checklist_items) + len(daily_tasks),
+            )
             streak = recovery_path.get("streak") or {
                 "current_streak": 0,
                 "longest_streak": 0,
                 "next_goal": 7,
                 "streak_message": "Today is day one. Let's make it count!",
             }
+
+            consistency_percent = int(self._extract_percent(progress_tracking.get("consistency"), 42))
+            recovery_score_percent = int(self._extract_percent(progress_tracking.get("recovery_score"), 58))
+            completed_today = sum(1 for item in daily_tasks if item.get("completed"))
+            completed_exercises = sum(1 for item in exercises if item.get("completed"))
 
             return DomainFlowOut(
                 status="completed",
@@ -838,6 +883,50 @@ class DomainService:
                 ai_recovery={
                     "streak": streak,
                     "daily_tasks": daily_tasks,
+                    "exercises": exercises,
+                },
+                ai_summary={
+                    "title": "Recovery Path",
+                    "subtitle": "Current streak overview",
+                    "streak": streak,
+                    "top_stats": [
+                        {"key": "current_streak", "label": "Current Streak", "value": f"{streak.get('current_streak', 0)} days"},
+                        {"key": "longest_streak", "label": "Longest Streak", "value": f"{streak.get('longest_streak', 0)} days"},
+                        {"key": "next_goal", "label": "Next Goal", "value": f"{streak.get('next_goal', 7)} days"},
+                    ],
+                },
+                daily_plan={
+                    "title": "Recovery Path",
+                    "subtitle": "Your Daily Tasks",
+                    "tabs": ["daily_plan", "exercise"],
+                    "default_tab": "daily_plan",
+                    "today_progress": {
+                        "completed": completed_today,
+                        "total": len(daily_tasks),
+                    },
+                    "actions": [
+                        {"key": "report_relapse", "label": "Report Relapse"},
+                        {"key": "complete_day", "label": "Complete day"},
+                    ],
+                    "daily_tasks": daily_tasks,
+                    "exercises": exercises,
+                },
+                progress_screen={
+                    "title": "Recovery Path",
+                    "subtitle": "Track your recovery journey",
+                    "period_tabs": ["week", "month", "year"],
+                    "main_metrics": [
+                        {"key": "consistency", "label": "Consistency", "value": f"{consistency_percent}%"},
+                        {"key": "recovery_score", "label": "Recovery Score", "value": f"{recovery_score_percent}%"},
+                    ],
+                    "consistency_percent": consistency_percent,
+                    "recovery_score_percent": recovery_score_percent,
+                    "insight_text": str(_get("motivational_message") or "One day at a time. That is all you need to focus on. Keep going!"),
+                    "daily_recovery_checklist": checklist_items,
+                    "exercise_progress": {
+                        "completed": completed_exercises,
+                        "total": len(exercises),
+                    },
                 },
             )
 

@@ -80,6 +80,32 @@ Return this JSON schema exactly:
         "duration_min": 10,
         "completed": false
       }}
+    ],
+    "exercises": [
+      {{
+        "seq": 1,
+        "title": "Power Pushups",
+        "description": "Channel your energy into physical strength.",
+        "category": "physical",
+        "duration": "2 min",
+        "completed": false
+      }},
+      {{
+        "seq": 2,
+        "title": "Cold Shower Challenge",
+        "description": "Reset your nervous system and improve discipline.",
+        "category": "physical",
+        "duration": "2 min",
+        "completed": false
+      }},
+      {{
+        "seq": 3,
+        "title": "Box-Breathing",
+        "description": "Breathe in cycles to calm urges and anxiety.",
+        "category": "mental",
+        "duration": "4 min",
+        "completed": false
+      }}
     ]
   }},
   "progress_tracking": {{

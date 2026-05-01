@@ -71,7 +71,88 @@ def _default_recovery_path() -> dict[str, Any]:
                 "completed": False,
             },
         ],
-        "exercises": [],
+        "exercises": [
+            {
+                "seq": 1,
+                "title": "Power Pushups",
+                "description": "Channel your urge into physical strength. Do as many reps as you can.",
+                "category": "physical",
+                "duration": "2 min",
+                "completed": False,
+            },
+            {
+                "seq": 2,
+                "title": "Cold Shower Challenge",
+                "description": "A short cold shower helps reset your nervous system and lower impulses.",
+                "category": "physical",
+                "duration": "2 min",
+                "completed": False,
+            },
+            {
+                "seq": 3,
+                "title": "Box-Breathing",
+                "description": "Inhale 4 sec, hold 4 sec, exhale 4 sec, hold 4 sec.",
+                "category": "mental",
+                "duration": "4 min",
+                "completed": False,
+            },
+            {
+                "seq": 4,
+                "title": "Mindful Walk",
+                "description": "Take a short walk and focus on your breath and surroundings.",
+                "category": "physical",
+                "duration": "10 min",
+                "completed": False,
+            },
+            {
+                "seq": 5,
+                "title": "Gratitude Journal",
+                "description": "Write 3 things you are grateful for to shift attention positively.",
+                "category": "mental",
+                "duration": "3 min",
+                "completed": False,
+            },
+            {
+                "seq": 6,
+                "title": "Urge Surfing",
+                "description": "Observe urge sensations without reacting until they naturally pass.",
+                "category": "mental",
+                "duration": "5 min",
+                "completed": False,
+            },
+            {
+                "seq": 7,
+                "title": "Plank Challenge",
+                "description": "Hold a plank to build mental and physical resilience.",
+                "category": "physical",
+                "duration": "2 min",
+                "completed": False,
+            },
+            {
+                "seq": 8,
+                "title": "Calm Mind Meditation",
+                "description": "Sit quietly and focus on slow breathing to reduce impulsivity.",
+                "category": "mental",
+                "duration": "5 min",
+                "completed": False,
+            },
+            {
+                "seq": 9,
+                "title": "Trigger Analysis",
+                "description": "Write one trigger and one replacement action to use next time.",
+                "category": "mental",
+                "duration": "4 min",
+                "completed": False,
+            },
+            {
+                "seq": 10,
+                "title": "Future Self Visualization",
+                "description": "Close your eyes and picture your stronger future self for one minute.",
+                "category": "mental",
+                "duration": "1 min",
+                "completed": False,
+            },
+        ],
     }
 
 
@@ -173,6 +254,7 @@ def _normalize_exercises(recovery: dict) -> list[dict[str, Any]]:
                     "title": _normalize_text(item.get("title")),
                     "description": _normalize_text(item.get("description")),
                     "category": _normalize_text(item.get("category"), "mental"),
+                    "duration": _normalize_text(item.get("duration"), "5 min"),
                     "completed": bool(item.get("completed", False)),
                 })
             elif isinstance(item, str) and item.strip():
@@ -181,9 +263,10 @@ def _normalize_exercises(recovery: dict) -> list[dict[str, Any]]:
                     "title": item.strip(),
                     "description": "",
                     "category": "mental",
+                    "duration": "5 min",
                     "completed": False,
                 })
-        return exercises
+        return exercises or _default_recovery_path()["exercises"]
     except Exception as e:
         logger.error(f"Error normalizing quit_porn exercises: {e}")
         return []
