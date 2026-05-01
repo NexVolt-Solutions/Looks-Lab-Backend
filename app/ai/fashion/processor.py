@@ -6,6 +6,7 @@ from app.ai.gemini_client import GeminiError, run_gemini_json
 from app.core.logging import logger
 
 _HEX_RE = re.compile(r"^#[0-9A-Fa-f]{6}$")
+_DAYS_ORDER = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
 
 def _safe(data: dict, key: str, default: Any = None) -> Any:
@@ -108,16 +109,31 @@ def normalize_weekly_plan(data: dict) -> list[dict[str, str]]:
     try:
         weekly_plan = _safe(data, "weekly_plan", [])
         if isinstance(weekly_plan, dict):
-            days_order = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-            weekly_plan = [{"day": day, "theme": weekly_plan.get(day, "Casual")} for day in days_order]
+            weekly_plan = [{"day": day, "theme": weekly_plan.get(day, "Casual")} for day in _DAYS_ORDER]
         elif not isinstance(weekly_plan, list):
             return _default_weekly_plan()
 
-        cleaned = [
-            {"day": _normalize_text(item.get("day")), "theme": _normalize_text(item.get("theme"), "Casual")}
-            for item in weekly_plan[:7] if isinstance(item, dict) and (_normalize_text(item.get("day")) or _normalize_text(item.get("theme")))
-        ]
-        return cleaned or _default_weekly_plan()
+        by_day: dict[str, str] = {}
+        for item in weekly_plan:
+            if not isinstance(item, dict):
+                continue
+            day = _normalize_text(item.get("day"))
+            if not day:
+                continue
+            normalized_day = day.strip().title()
+            if normalized_day in _DAYS_ORDER and normalized_day not in by_day:
+                by_day[normalized_day] = _normalize_text(item.get("theme"), "Casual")
+
+        # Always return all days in stable order so UI cards/tabs render predictably.
+        final_plan = []
+        defaults_by_day = {item["day"]: item["theme"] for item in _default_weekly_plan()}
+        for day in _DAYS_ORDER:
+            final_plan.append({
+                "day": day,
+                "theme": _normalize_text(by_day.get(day), defaults_by_day.get(day, "Casual")),
+            })
+
+        return final_plan
     except Exception as e:
         logger.error(f"Error normalizing fashion weekly plan: {e}")
         return _default_weekly_plan()

@@ -671,6 +671,71 @@ class DomainService:
         def _get(key: str) -> Optional[Any]:
             return ai_output.get(key) if ai_output else None
 
+        if domain == "fashion":
+            attributes = _get("attributes") or {}
+            routine = _get("routine") or {}
+            weekly_plan = routine.get("weekly_plan") if isinstance(routine, dict) else []
+            seasonal_style = routine.get("seasonal_style") if isinstance(routine, dict) else {}
+            images = await self._get_domain_images(user_id, domain)
+
+            def _scan_url(view_name: str) -> Optional[str]:
+                for image in images:
+                    if str(image.get("view", "")).lower() == view_name:
+                        return image.get("url")
+                return None
+
+            front_scan = _scan_url("front")
+            back_scan = _scan_url("back")
+            profile_traits = [
+                {"key": "body_type", "label": "Body Type", "value": str(attributes.get("body_type") or "Athletic")},
+                {"key": "undertone", "label": "Undertone", "value": str(attributes.get("undertone") or "Warm")},
+                {"key": "style", "label": "Style", "value": str(attributes.get("style") or "Classic")},
+            ]
+            analyzing_insights = attributes.get("analyzing_insights") if isinstance(attributes.get("analyzing_insights"), list) else []
+            if not analyzing_insights:
+                analyzing_insights = [
+                    "Balanced style profile generated",
+                    "Recommendations aligned with your goals",
+                ]
+
+            return DomainFlowOut(
+                status="completed",
+                redirect="completed_flow",
+                progress=progress,
+                ai_message=str(_get("motivational_message") or "Own your style with confidence every day."),
+                ai_attributes={
+                    "body_type": profile_traits[0]["value"],
+                    "undertone": profile_traits[1]["value"],
+                    "style": profile_traits[2]["value"],
+                },
+                ai_summary={
+                    "title": "Your Style Profile",
+                    "subtitle": "AI analysis complete",
+                    "profile_traits": profile_traits,
+                    "review_scans": [
+                        {"key": "front", "label": "Front View", "url": front_scan},
+                        {"key": "back", "label": "Back View", "url": back_scan},
+                    ],
+                    "analyzing_insights": [str(item) for item in analyzing_insights[:5]],
+                    "best_clothing_fits": [str(item) for item in (attributes.get("best_clothing_fits") or [])[:3]],
+                    "styles_to_avoid": [str(item) for item in (attributes.get("styles_to_avoid") or [])[:3]],
+                    "warm_palette": [str(item) for item in (attributes.get("warm_palette") or [])[:6]],
+                },
+                # Keep generic ai_routine for existing clients while adding UI-shaped cards below.
+                ai_routine={
+                    "weekly_plan": weekly_plan if isinstance(weekly_plan, list) else [],
+                    "seasonal_style": seasonal_style if isinstance(seasonal_style, dict) else {},
+                },
+                daily_plan={
+                    "title": "Weekly Plan",
+                    "subtitle": "Daily style themes to keep you sharp",
+                    "weekly_plan": weekly_plan if isinstance(weekly_plan, list) else [],
+                    "season_tabs": ["summer", "monsoon", "winter"],
+                    "default_season": "summer",
+                    "seasonal_style": seasonal_style if isinstance(seasonal_style, dict) else {},
+                },
+            )
+
         if domain == "quit_porn":
             progress_tracking = _get("progress_tracking") or {}
             recovery_path = _get("recovery_path") or {}
@@ -1060,7 +1125,12 @@ class DomainService:
                     # Build real bullet points from AI concerns output
                     concerns = ai_output.get("concerns", {})
                     points = []
-                    if isinstance(concerns, dict):
+                    if domain == "fashion":
+                        attributes = ai_output.get("attributes", {})
+                        raw_insights = attributes.get("analyzing_insights", []) if isinstance(attributes, dict) else []
+                        if isinstance(raw_insights, list):
+                            points = [str(item).strip() for item in raw_insights if str(item).strip()][:5]
+                    elif isinstance(concerns, dict):
                         for key, val in concerns.items():
                             if isinstance(val, dict):
                                 label = val.get("label", "")

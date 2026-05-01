@@ -1,5 +1,21 @@
 def build_context(answers: list[dict], images: list[dict]) -> dict:
+    answer_map = {}
+    for answer in answers:
+        question = str(answer.get("question") or "").lower()
+        value = answer.get("answer")
+        if "accessor" in question:
+            answer_map["accessories_preference"] = value
+        elif "fashion trend" in question or "follow fashion" in question or "trend" in question:
+            answer_map["trend_preference"] = value
+        elif "clothes to fit" in question or "prefer your clothes" in question or "fit" in question:
+            answer_map["fit_preference"] = value
+        elif "active" in question or "activity" in question:
+            answer_map["activity_level"] = value
+        elif "style to highlight" in question or "style goal" in question:
+            answer_map["style_goal"] = value
+
     return {
+        "answer_map": answer_map,
         "answers": [
             {
                 "step": a.get("step"),
@@ -29,6 +45,8 @@ Important instructions:
 - Do not include markdown, code fences, or any explanatory text outside the JSON object.
 - Keep the style advice practical, wearable, and specific.
 - Color values in warm_palette must be valid hex strings.
+- Weekly plan must include all 7 days from Monday to Sunday exactly once.
+- Recommendations must align with user-selected preferences in answer_map.
 
 Return this JSON schema exactly:
 {{
