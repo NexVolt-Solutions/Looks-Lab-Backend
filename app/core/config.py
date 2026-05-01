@@ -25,7 +25,6 @@ class Settings(BaseSettings):
     JWT_REFRESH_SECRET: str = ""
     REFRESH_TOKEN_EXPIRATION_DAYS: int = 30
 
-    LOCAL_STORAGE_PATH: str = "./media"
     MAX_FILE_SIZE_MB: int = 10
     ALLOWED_IMAGE_TYPES: str = "image/jpeg,image/png,image/webp"
 
@@ -80,7 +79,7 @@ class Settings(BaseSettings):
 
     @property
     def use_s3(self) -> bool:
-        return bool(self.AWS_S3_BUCKET and self.AWS_ACCESS_KEY_ID and self.AWS_SECRET_ACCESS_KEY)
+        return bool(self.AWS_S3_BUCKET and self.AWS_REGION)
 
     @property
     def cors_origins_list(self) -> list[str]:
@@ -121,6 +120,10 @@ class Settings(BaseSettings):
             errors.append("GEMINI_API_KEY is required")
         if not self.GOOGLE_CLIENT_ID:
             errors.append("GOOGLE_CLIENT_ID is required")
+        if not self.AWS_S3_BUCKET:
+            errors.append("AWS_S3_BUCKET is required (S3-only storage)")
+        if not self.AWS_REGION:
+            errors.append("AWS_REGION is required (S3-only storage)")
 
         if self.is_production:
             if not self.CORS_ORIGINS:
@@ -129,8 +132,6 @@ class Settings(BaseSettings):
                 errors.append("TRUSTED_HOSTS must be set in production")
             if not self.JWT_REFRESH_SECRET:
                 errors.append("JWT_REFRESH_SECRET must be set in production")
-            if self.use_s3 and not self.AWS_REGION:
-                errors.append("AWS_REGION is required when using S3")
             if self.ENABLE_SENTRY and not self.SENTRY_DSN:
                 errors.append("SENTRY_DSN is required when ENABLE_SENTRY is True")
             if not self.APPLE_SHARED_SECRET:
