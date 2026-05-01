@@ -78,6 +78,12 @@ async def upload_domain_image(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="For fashion domain, view must be either 'front' or 'back'.",
             )
+    if effective_domain == "facial":
+        if effective_view not in {"front", "right", "left"}:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="For facial domain, view must be one of: 'front', 'right', 'left'.",
+            )
 
     return await ImageService(db).upload_image(
         file=file,
