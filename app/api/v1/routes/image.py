@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Request, UploadFile, File, Query
+from fastapi import APIRouter, Depends, Request, UploadFile, File, Form, Query, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -47,9 +47,12 @@ async def upload_simple_image(
 async def upload_domain_image(
     request: Request,
     file: UploadFile = File(...),
-    domain: str | None = None,
-    view: str | None = None,
-    image_type: ImageType = ImageType.uploaded,
+    domain: str | None = Form(None),
+    view: str | None = Form(None),
+    image_type: ImageType = Form(ImageType.uploaded),
+    domain_query: str | None = Query(None, alias="domain"),
+    view_query: str | None = Query(None, alias="view"),
+    image_type_query: ImageType | None = Query(None, alias="image_type"),
     db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -60,12 +63,28 @@ async def upload_domain_image(
     - view: the angle/type of photo e.g. front, side, hair_top
     """
     detected_mime_type = await validate_upload_file(file)
+    effective_domain = (domain or domain_query)
+    effective_view = (view or view_query)
+    effective_image_type = image_type_query or image_type
+
+    if effective_domain:
+        effective_domain = effective_domain.strip().lower()
+    if effective_view:
+        effective_view = effective_view.strip().lower()
+
+    if effective_domain == "fashion":
+        if effective_view not in {"front", "back"}:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="For fashion domain, view must be either 'front' or 'back'.",
+            )
+
     return await ImageService(db).upload_image(
         file=file,
         user_id=current_user.id,
-        domain=domain,
-        view=view,
-        image_type=image_type,
+        domain=effective_domain,
+        view=effective_view,
+        image_type=effective_image_type,
         detected_mime_type=detected_mime_type,
     )
 

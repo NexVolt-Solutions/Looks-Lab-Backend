@@ -249,14 +249,28 @@ class DomainService:
         for idx, q in enumerate(questions):
             if q.id not in answered_ids:
                 next_q = questions[idx + 1] if idx + 1 < len(questions) else None
+                status_value = "in_progress" if domain == "fashion" else "ok"
                 return DomainFlowOut(
-                    status="ok",
+                    status=status_value,
                     current=DomainQuestionOut.model_validate(q),
                     next=DomainQuestionOut.model_validate(next_q) if next_q else None,
                     progress=await self.calculate_progress(domain, user_id),
                 )
 
         progress = await self.calculate_progress(domain, user_id)
+
+        # Fashion contract: both required scans must exist before AI processing can start.
+        if domain == "fashion":
+            front_ready, back_ready = await self._fashion_required_scans_ready(user_id)
+            if not (front_ready and back_ready):
+                return DomainFlowOut(
+                    status="pending",
+                    current=None,
+                    next=None,
+                    progress=progress,
+                    redirect="review_scans",
+                )
+
         fresh_ai_output = await self._get_fresh_completed_ai_output(user_id, domain)
         if fresh_ai_output:
             logger.info(f"Returning persisted completed flow for {domain} (user {user_id})")
@@ -421,12 +435,28 @@ class DomainService:
     async def _get_domain_images(self, user_id: int, domain: str) -> list[dict]:
         try:
             result = await self.db.execute(
-                select(Image).where(Image.user_id == user_id, Image.domain == domain)
+                select(Image)
+                .where(Image.user_id == user_id, Image.domain == domain)
+                .order_by(Image.uploaded_at.desc())
             )
             return [{"view": img.view, "url": img.url or img.s3_key} for img in result.scalars().all()]
         except Exception as e:
             logger.warning(f"Could not fetch images for {domain} (user {user_id}): {e}")
             return []
+
+    async def _fashion_required_scans_ready(self, user_id: int) -> tuple[bool, bool]:
+        """Return whether latest fashion front/back scans exist for a user."""
+        result = await self.db.execute(
+            select(Image.view)
+            .where(
+                Image.user_id == user_id,
+                Image.domain == "fashion",
+                Image.view.in_(["front", "back"]),
+            )
+            .order_by(Image.uploaded_at.desc())
+        )
+        present_views = {str(view).lower() for (view,) in result.all() if view}
+        return "front" in present_views, "back" in present_views
 
     def _extract_score(self, domain: str, ai_output: dict) -> Optional[float]:
         return extract_domain_score(domain, ai_output)
