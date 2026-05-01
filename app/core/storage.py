@@ -1,5 +1,4 @@
 import uuid
-from pathlib import Path
 from typing import BinaryIO, Optional
 
 import boto3
@@ -45,46 +44,6 @@ class BaseStorage:
             parts.append(view)
         parts.append(unique_name)
         return "/".join(parts)
-
-
-class LocalStorage(BaseStorage):
-
-    def __init__(self, base_path: Optional[str] = None):
-        self.base_path = Path(base_path or settings.LOCAL_STORAGE_PATH)
-        self.base_path.mkdir(parents=True, exist_ok=True)
-
-    def _get_full_path(self, file_path: str) -> Path:
-        return self.base_path / file_path.lstrip("/")
-
-    def upload(self, file: BinaryIO, destination_path: str, content_type: Optional[str] = None) -> str:
-        try:
-            full_path = self._get_full_path(destination_path)
-            full_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(full_path, "wb") as f:
-                f.write(file.read() if hasattr(file, "read") else file)
-            return destination_path
-        except Exception as e:
-            raise StorageUploadError(f"Failed to upload file: {e}")
-
-    def delete(self, file_path: str) -> bool:
-        try:
-            full_path = self._get_full_path(file_path)
-            if not full_path.exists():
-                raise StorageNotFoundError(f"File not found: {file_path}")
-            full_path.unlink()
-            return True
-        except StorageNotFoundError:
-            raise
-        except Exception as e:
-            raise StorageDeleteError(f"Failed to delete file: {e}")
-
-    def get_url(self, file_path: str, expiry: int = 3600) -> str:
-        if settings.APP_URL:
-            return f"{settings.APP_URL}/media/{file_path}"
-        return f"/media/{file_path}"
-
-    def exists(self, file_path: str) -> bool:
-        return self._get_full_path(file_path).exists()
 
 
 class S3Storage(BaseStorage):
@@ -166,7 +125,7 @@ _storage_instance: Optional[BaseStorage] = None
 def get_storage() -> BaseStorage:
     global _storage_instance
     if _storage_instance is None:
-        _storage_instance = S3Storage() if settings.use_s3 else LocalStorage()
-        logger.info(f"Storage backend: {'S3' if settings.use_s3 else 'local'}")
+        _storage_instance = S3Storage()
+        logger.info("Storage backend: S3")
     return _storage_instance
 

@@ -18,7 +18,7 @@ The backend supports:
 - PostgreSQL
 - Alembic
 - Google Gemini
-- AWS S3 or local file storage
+- AWS S3 storage
 - SlowAPI rate limiting
 - Prometheus FastAPI Instrumentator
 
@@ -48,7 +48,7 @@ Client App
   -> SQLAlchemy models / PostgreSQL
   -> external services
        - Google Gemini
-       - AWS S3 or local storage
+       - AWS S3 storage
        - Google / Apple auth verification
        - Open Food Facts barcode API
 ```
@@ -92,7 +92,7 @@ POST /api/v1/auth/sign-out
 
 Notes:
 - access tokens are JWTs
-- refresh tokens are stored in the database
+- refresh tokens are hashed before storing in the database
 - protected routes use Bearer auth
 
 ## Onboarding Flow
@@ -170,7 +170,7 @@ POST /api/v1/domains/diet/foods/analyze
 
 High-level behavior:
 - files are validated before storage
-- storage can be local or S3 depending on environment
+- storage is S3-only
 - images are saved in the `images` table with domain, view, type, and status metadata
 - image-heavy domains such as `skincare`, `haircare`, `facial`, and `fashion` start in `processing` state
 - those image-heavy domains may trigger quick preview analysis and later full domain AI analysis
@@ -279,7 +279,7 @@ CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
 TRUSTED_HOSTS=localhost,127.0.0.1
 ```
 
-Optional storage variables:
+Required storage variables (S3-only):
 ```env
 AWS_REGION=us-east-1
 AWS_S3_BUCKET=your-private-bucket
@@ -287,7 +287,6 @@ AWS_ACCESS_KEY_ID=your-key
 AWS_SECRET_ACCESS_KEY=your-secret
 CLOUDFRONT_DOMAIN=cdn.example.com
 APP_URL=http://localhost:8000
-LOCAL_STORAGE_PATH=./media
 ```
 
 Useful flags:
@@ -365,7 +364,6 @@ Seeder:
 
 ## Known Gaps
 As of this README revision, a few parts of the system are scaffolded but still need hardening:
-- multi-worker-safe AI job state is not fully documented or hardened yet
 - Google Play receipt validation is incomplete
 - Apple and Google billing webhooks need fuller processing
 - documentation and ops endpoints should continue to be aligned with the running app
