@@ -207,16 +207,36 @@ class ImageService:
         await self.db.commit()
 
     async def _run_quick_analysis(self, image_id: int, image_url: str, domain: str, user_id: int) -> None:
+        from app.core.database import AsyncSessionLocal
+
+        async def _persist_quick_analysis_result(
+            *,
+            points: Optional[list[str]] = None,
+            error_message: Optional[str] = None,
+        ) -> None:
+            async with AsyncSessionLocal() as db:
+                result = await db.execute(select(Image).where(Image.id == image_id))
+                image = result.scalar_one_or_none()
+                if not image or image.user_id != user_id:
+                    return
+
+                if points is not None:
+                    image.analysis_result = {"points": points}
+                    image.error_message = None
+                elif error_message is not None:
+                    image.error_message = error_message[:512]
+
+                await db.commit()
+
         try:
-            import base64
             import json
             import asyncio
             import httpx
             from google import genai
             from google.genai import types
-            from app.ai.quick_analysis_prompt import QUICK_ANALYSIS_PROMPTS
+            from app.ai.quick_analysis_prompt import get_quick_prompt
 
-            prompt = QUICK_ANALYSIS_PROMPTS.get(domain)
+            prompt = get_quick_prompt(domain)
             if not prompt:
                 return
 
@@ -248,21 +268,19 @@ class ImageService:
             points = data.get("points") if isinstance(data, dict) else None
             if not isinstance(points, list):
                 logger.warning(f"Quick analysis returned no usable points for image {image_id} ({domain})")
-                await self._set_image_error_message(image_id, "Quick analysis returned no usable preview points")
+                await _persist_quick_analysis_result(error_message="Quick analysis returned no usable preview points")
                 return
             cleaned = [str(p).strip() for p in points if str(p).strip()][:5]
             if not cleaned:
                 logger.warning(f"Quick analysis returned empty points for image {image_id} ({domain})")
-                await self._set_image_error_message(image_id, "Quick analysis returned empty preview points")
+                await _persist_quick_analysis_result(error_message="Quick analysis returned empty preview points")
                 return
 
-            result = await self.db.execute(select(Image).where(Image.id == image_id))
-            image = result.scalar_one_or_none()
-            if image and image.user_id == user_id:
-                image.analysis_result = {"points": cleaned}
-                image.error_message = None
-                await self.db.commit()
-                logger.info(f"Saved quick analysis for image {image_id} ({domain})")
+            await _persist_quick_analysis_result(points=cleaned)
+            logger.info(f"Saved quick analysis for image {image_id} ({domain})")
         except Exception as e:
             logger.warning(f"Quick analysis failed for image {image_id} ({domain}): {e}")
-            await self._set_image_error_message(image_id, str(e))
+            try:
+                await _persist_quick_analysis_result(error_message=str(e))
+            except Exception:
+                logger.warning(f"Failed to persist quick analysis error for image {image_id} ({domain})")
