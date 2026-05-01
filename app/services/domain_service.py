@@ -847,7 +847,8 @@ class DomainService:
             routine = _get("routine") or {}
             progress_tracking = _get("progress_tracking") or {}
             completion_record = await self._get_today_completion_record(user_id, domain)
-            completed_indices = self._completed_index_set(completion_record)
+            completed_indices = set(completion_record.completed_indices or []) if completion_record else set()
+            recovery_completed_indices = set(completion_record.recovery_completed_indices or []) if completion_record else set()
 
             today_focus = attributes.get("today_focus")
             if not isinstance(today_focus, list):
@@ -885,12 +886,11 @@ class DomainService:
             if not checklist_raw:
                 checklist_raw = self._default_diet_recovery_checklist()
             checklist_items = []
-            checklist_offset = len(morning_items) + len(evening_items)
             for idx, title in enumerate(checklist_raw[:4]):
                 checklist_items.append({
                     "seq": idx + 1,
                     "title": str(title),
-                    "completed": (checklist_offset + idx) in completed_indices,
+                    "completed": idx in recovery_completed_indices,
                 })
 
             diet_consistency_percent = self._extract_percent(progress_tracking.get("diet_consistency"), 0.0)

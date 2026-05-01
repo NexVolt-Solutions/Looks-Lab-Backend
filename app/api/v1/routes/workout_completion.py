@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime, timezone
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -95,12 +95,16 @@ async def get_completed_exercises(
     service = WorkoutCompletionService(db)
     result = await service.get_completion(current_user.id, date, domain=domain)
     if not result:
+        expected_total, recovery_total = await service._resolve_expected_totals(current_user.id, domain, date)
         return WorkoutCompletionOut(
             date=date,
             completed_indices=[],
-            total_exercises=6,
+            total_exercises=expected_total or 0,
             score=0.0,
             recovery_completed_indices=[],
+            recovery_total=recovery_total,
+            updated_at=datetime.now(timezone.utc),
+            version=0,
         )
     return result
 
