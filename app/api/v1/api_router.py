@@ -21,3 +21,8 @@ router.include_router(insights.router,           prefix="/api/v1/insights",     
 router.include_router(legal.router,              prefix="/api/v1/legal",           tags=["Legal"])
 router.include_router(iap.router,                prefix="/api/v1/iap",             tags=["In-App Purchases"])
 
+# Compatibility aliases for frontend handoff paths.
+# Keep /api/v1 routes as primary, while also supporting /domains and /images.
+router.include_router(domain.router,             prefix="/domains",                tags=["Domains (Alias)"])
+router.include_router(image.router,              prefix="/images",                 tags=["Images (Alias)"])
+
